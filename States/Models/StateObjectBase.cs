@@ -26,8 +26,8 @@ namespace Amaryllis.States.Models
         {
             AmaryllisLog.Log($@"[StateObjectBase] PreInit {_stateId}");
 
-             _actions = GetComponentsInChildren<IRunAction>().ToList();
-             _conditions = GetComponentsInChildren<IStateCondition>().ToList();
+             _actions = GetComponentsInChildren<IRunAction>(true).Where(action => action != null).ToList();
+             _conditions = GetComponentsInChildren<IStateCondition>(true).Where(condition => condition != null).ToList();
              
              await RunActionLogicHelper.RunActionsAsync(ExecTimeType.PreInit, null, _actions, cancellationToken);
         }
@@ -65,6 +65,11 @@ namespace Amaryllis.States.Models
 
         public bool IsReadyForExec(IEntity entity)
         {
+            if (_conditions == null)
+            {
+                _conditions = GetComponentsInChildren<IStateCondition>(true).Where(condition => condition != null).ToList();
+            }
+            
             foreach (var condition in _conditions)
             {
                 if (!condition.IsCanExec(entity))

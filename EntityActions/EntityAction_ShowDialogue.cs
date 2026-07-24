@@ -43,7 +43,11 @@ namespace Amaryllis.EntityActions
             {
                 if (action != null)
                 {
-                    await action.Run(entity, cancellationToken);
+                    var result = await action.Run(entity, cancellationToken);
+                    if (result == RunActionResult.Failed || result == RunActionResult.Canceled)
+                    {
+                        return;
+                    }
                 }
             }
         }

@@ -16,6 +16,11 @@ namespace Amaryllis.EntityActions
         
         protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
+            if (_entityObject != null)
+            {
+                _entityObject.SetActive(_isEnable);
+            }
+            
             //var sceneEntity = _entityObject.GetComponent<ISceneEntity>();
             
             // if (sceneEntity != null)

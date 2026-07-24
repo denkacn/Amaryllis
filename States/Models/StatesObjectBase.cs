@@ -20,6 +20,7 @@ namespace Amaryllis.States.Models
         [SerializeField] private int _startState;
 
         private List<IStateObject> _states = new List<IStateObject>();
+        private Dictionary<int, IStateObject> _statesById = new Dictionary<int, IStateObject>();
         
         private IStateObject _currentState;
         private CancellationTokenSource _stateCancellationTokenSource;
@@ -42,7 +43,8 @@ namespace Amaryllis.States.Models
             }
 
             _isInitialized = true;
-            _states = GetComponentsInChildren<IStateObject>().ToList();
+            BuildStateCache();
+            ValidateStateGraph(true);
             
             await MoveToStateAsync(_startState, cancellationToken);
             
@@ -70,28 +72,33 @@ namespace Amaryllis.States.Models
 
             try
             {
-            if (isCheckConditions)
-            {
-                var isReady = _currentState.IsReadyForExec(entity);
-
-                if (!isReady)
+                var executedState = _currentState;
+                
+                if (isCheckConditions)
                 {
-                    await ConditionFailAsync(entity, linkedCancellation.Token);
+                    var isReady = executedState.IsReadyForExec(entity);
+
+                    if (!isReady)
+                    {
+                        await ConditionFailAsync(entity, linkedCancellation.Token);
                     
-                    OnConditionFailHandler?.Invoke(entity == null ? string.Empty : entity.Id);
-                    return;
+                        OnConditionFailHandler?.Invoke(entity == null ? string.Empty : entity.Id);
+                        return;
+                    }
                 }
-            }
 
-            AmaryllisLog.Log("[StatesObjectBase] entity = " + entity);
+                AmaryllisLog.Log("[StatesObjectBase] entity = " + entity);
             
-            await _currentState.ExecAsync(entity, linkedCancellation.Token);
+                await executedState.ExecAsync(entity, linkedCancellation.Token);
             
-            OnExecHandler?.Invoke(entity == null ? string.Empty : entity.Id);
+                OnExecHandler?.Invoke(entity == null ? string.Empty : entity.Id);
 
-            await OnExecCompleted(_currentState.NextStateId, cancellationToken);
+                if (ReferenceEquals(_currentState, executedState))
+                {
+                    await OnExecCompleted(executedState.NextStateId, cancellationToken);
+                }
 
-            AmaryllisLog.Log("[StatesObjectBase] Exec");
+                AmaryllisLog.Log("[StatesObjectBase] Exec");
             }
             catch (OperationCanceledException)
             {
@@ -126,6 +133,13 @@ namespace Amaryllis.States.Models
         private async UniTask MoveToStateAsync(int stateId, CancellationToken cancellationToken)
         {
             if (stateId == -1) return;
+            
+            if (!_statesById.ContainsKey(stateId))
+            {
+                Debug.LogError($"[Amaryllis] [StatesObjectBase] State id {stateId} not found in {name}", this);
+                return;
+            }
+            
             if (_isTransitioning)
             {
                 AmaryllisLog.Log($"[StatesObjectBase] MoveToState skipped: transition already running ({stateId})");
@@ -159,7 +173,7 @@ namespace Amaryllis.States.Models
 
         private async UniTask InitNewStateAsync(int stateId, CancellationToken cancellationToken)
         {
-            _currentState = _states.Find(s => s.StateId == stateId);
+            _statesById.TryGetValue(stateId, out _currentState);
 
             if (_currentState == null) return;
 
@@ -179,6 +193,80 @@ namespace Amaryllis.States.Models
         private CancellationToken GetStateCancellationToken()
         {
             return _stateCancellationTokenSource?.Token ?? CancellationToken.None;
+        }
+
+        private void BuildStateCache()
+        {
+            _states = GetComponentsInChildren<IStateObject>(true).Where(state => state != null).ToList();
+            _statesById = new Dictionary<int, IStateObject>();
+
+            foreach (var state in _states)
+            {
+                if (_statesById.ContainsKey(state.StateId))
+                {
+                    continue;
+                }
+
+                _statesById.Add(state.StateId, state);
+            }
+        }
+
+        private bool ValidateStateGraph(bool logErrors)
+        {
+            var isValid = true;
+
+            if (_states.Count == 0)
+            {
+                LogValidationError("State graph is empty", logErrors);
+                return false;
+            }
+
+            var duplicateStateIds = _states
+                .GroupBy(state => state.StateId)
+                .Where(group => group.Count() > 1)
+                .Select(group => group.Key);
+
+            foreach (var duplicateStateId in duplicateStateIds)
+            {
+                isValid = false;
+                LogValidationError($"Duplicate state id {duplicateStateId}", logErrors);
+            }
+
+            if (!_statesById.ContainsKey(_startState))
+            {
+                isValid = false;
+                LogValidationError($"Start state id {_startState} not found", logErrors);
+            }
+
+            foreach (var state in _states)
+            {
+                if (state.NextStateId == -1)
+                {
+                    continue;
+                }
+
+                if (!_statesById.ContainsKey(state.NextStateId))
+                {
+                    isValid = false;
+                    LogValidationError($"State {state.StateId} points to missing next state {state.NextStateId}", logErrors);
+                }
+            }
+
+            return isValid;
+        }
+
+        private void LogValidationError(string message, bool logErrors)
+        {
+            if (logErrors)
+            {
+                Debug.LogError($"[Amaryllis] [StatesObjectBase] {message} in {name}", this);
+            }
+        }
+
+        private void OnValidate()
+        {
+            BuildStateCache();
+            ValidateStateGraph(true);
         }
     }
 }

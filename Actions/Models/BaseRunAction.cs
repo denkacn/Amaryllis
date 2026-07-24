@@ -10,6 +10,14 @@ using UnityEngine;
 
 namespace Amaryllis.Actions.Models
 {
+    public enum RunActionResult
+    {
+        Success,
+        Skipped,
+        Failed,
+        Canceled
+    }
+
     public abstract class BaseRunAction : MonoBehaviour, IRunAction
     {
         [SerializeField] private int _execPriority = 0;
@@ -22,10 +30,10 @@ namespace Amaryllis.Actions.Models
         public int ExecPriority => _execPriority;
         public ExecTimeType ExecTime => _execTimeType;
 
-        public virtual async UniTask<bool> Run(IEntity entity, CancellationToken cancellationToken = default)
+        public virtual async UniTask<RunActionResult> Run(IEntity entity, CancellationToken cancellationToken = default)
         {
-            if (!_isEnable) return true;
-            if (!IsCanRun(entity)) return false;
+            if (!_isEnable) return RunActionResult.Skipped;
+            if (!IsCanRun(entity)) return RunActionResult.Skipped;
 
             using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, this.GetCancellationTokenOnDestroy());
 
@@ -36,11 +44,17 @@ namespace Amaryllis.Actions.Models
                     await UniTask.Delay(_startDelayMs, cancellationToken: linkedCancellation.Token);
                 }
                 
-                return await RunLogic(entity, linkedCancellation.Token);
+                var isSuccess = await RunLogic(entity, linkedCancellation.Token);
+                return isSuccess ? RunActionResult.Success : RunActionResult.Failed;
             }
             catch (OperationCanceledException)
             {
-                return false;
+                return RunActionResult.Canceled;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogException(exception, this);
+                return RunActionResult.Failed;
             }
         }
 

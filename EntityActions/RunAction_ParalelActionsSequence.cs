@@ -25,7 +25,7 @@ namespace Amaryllis.EntityActions
                 await UniTask.Delay((int)(_actionTime * 1000), cancellationToken: cancellationToken);
             }
             
-            return results.All(result => result);
+            return results.All(result => result != RunActionResult.Failed && result != RunActionResult.Canceled);
         }
     }
 }

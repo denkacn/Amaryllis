@@ -31,7 +31,8 @@ namespace Amaryllis.EntityActions
                     continue;
                 }
                 
-                isOk &= await item.RunAction.Run(entity, cancellationToken);
+                var result = await item.RunAction.Run(entity, cancellationToken);
+                isOk &= result != RunActionResult.Failed && result != RunActionResult.Canceled;
             }
             
             return isOk;

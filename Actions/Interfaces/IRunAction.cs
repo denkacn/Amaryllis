@@ -1,5 +1,6 @@
 using System.Threading;
 using Amaryllis.Entities.Interfaces;
+using Amaryllis.Actions.Models;
 using Amaryllis.States.Models;
 using Cysharp.Threading.Tasks;
 
@@ -9,6 +10,6 @@ namespace Amaryllis.Actions.Interfaces
     {
         int ExecPriority { get; }
         ExecTimeType ExecTime { get; }
-        UniTask<bool> Run(IEntity entity, CancellationToken cancellationToken = default);
+        UniTask<RunActionResult> Run(IEntity entity, CancellationToken cancellationToken = default);
     }
 }

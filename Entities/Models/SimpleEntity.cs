@@ -25,6 +25,11 @@ namespace Amaryllis.Entities.Models
 
         private void Add(string entityId)
         {
+            if (!string.IsNullOrWhiteSpace(Id))
+            {
+                EntitiesManager.Remove(Id);
+            }
+            
             Id = entityId;
             
             OnCreateHandler?.Invoke(Id);

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Amaryllis.Actions.Interfaces;
+using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.States.Models;
 using Cysharp.Threading.Tasks;
@@ -27,7 +28,7 @@ namespace Amaryllis.Actions.Helpers
                 
                 var result = await action.Run(entity, cancellationToken);
                 
-                if (!result)
+                if (result == RunActionResult.Failed || result == RunActionResult.Canceled)
                 {
                     isOk = false;
                 }
