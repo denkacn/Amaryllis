@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Logs;
+using Amaryllis.Persistence;
 using Amaryllis.States.Interfaces;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
@@ -17,6 +18,7 @@ namespace Amaryllis.States.Models
         public event Action<string> OnConditionFailHandler;
         public event Action<int> OnStateChangedHandler;
         
+        [SerializeField] private string _saveId;
         [SerializeField] private int _startState;
 
         private List<IStateObject> _states = new List<IStateObject>();
@@ -28,6 +30,7 @@ namespace Amaryllis.States.Models
         private bool _isExecuting;
         private bool _isTransitioning;
 
+        public string SaveId => GetSaveId();
         public int CurrentStateId => _currentState?.StateId ?? -1;
 
         public void Init()
@@ -123,6 +126,26 @@ namespace Amaryllis.States.Models
             }
 
             await _currentState.RunConditionFailActions(entity, cancellationToken);
+        }
+
+        public StatesObjectSnapshot CaptureSnapshot()
+        {
+            return new StatesObjectSnapshot
+            {
+                SaveId = SaveId,
+                StateId = CurrentStateId
+            };
+        }
+
+        public async UniTask RestoreSnapshotAsync(StatesObjectSnapshot snapshot, CancellationToken cancellationToken = default)
+        {
+            if (snapshot == null)
+            {
+                return;
+            }
+
+            await InitAsync(cancellationToken);
+            await MoveToStateByIdAsync(snapshot.StateId, cancellationToken);
         }
         
         private async UniTask OnExecCompleted(int stateId, CancellationToken cancellationToken)
@@ -267,6 +290,36 @@ namespace Amaryllis.States.Models
         {
             BuildStateCache();
             ValidateStateGraph(true);
+        }
+
+        private string GetSaveId()
+        {
+            if (!string.IsNullOrWhiteSpace(_saveId))
+            {
+                return _saveId;
+            }
+
+            var entity = GetComponentInParent<IEntity>();
+            if (entity != null && !string.IsNullOrWhiteSpace(entity.Id))
+            {
+                return entity.Id;
+            }
+
+            return GetTransformPath(transform);
+        }
+
+        private static string GetTransformPath(Transform target)
+        {
+            var names = new Stack<string>();
+            var current = target;
+
+            while (current != null)
+            {
+                names.Push(current.name);
+                current = current.parent;
+            }
+
+            return string.Join("/", names);
         }
     }
 }

@@ -13,6 +13,7 @@ Core:
 Integrations and examples:
 - `EntityActions` - reusable Unity/gameplay actions built on top of core.
 - `Networks` - network authority checks and transport bridge components.
+- `Persistence` - save/load helpers for state snapshots.
 - `Utils` and `TestScene` - local test/demo helpers.
 
 Keep game-specific behavior in `EntityActions` or project-specific assemblies. Core code should depend on contracts such as `IEntity`, `IStatesObject`, `IRunAction`, `ICharacterActionTarget`, and transport interfaces rather than concrete game managers.
@@ -89,6 +90,31 @@ Action chains treat only `Failed` and `Canceled` as chain failure. `Skipped` is 
 - `Clear()`
 
 Duplicate ids replace the previous entry and log through `AmaryllisLog`.
+
+## Saving And Loading States
+
+Every `IStatesObject` exposes:
+
+- `SaveId` - stable id used as the save key.
+- `CaptureSnapshot()` - captures the current state id.
+- `RestoreSnapshotAsync(snapshot)` - initializes the state object if needed and moves it to the saved state.
+
+`StatesObjectBase` resolves `SaveId` in this order:
+
+1. Explicit `_saveId` from the inspector.
+2. Parent `IEntity.Id`, when available.
+3. Transform path fallback.
+
+For production saves, prefer explicit `_saveId` or entity ids. Transform paths are convenient for prototypes but can change when hierarchy names change.
+
+`StatesJsonSerializer` provides scene-level JSON serialization only:
+
+- `CaptureJson()` - captures all scene `IStatesObject` instances and returns JSON.
+- `ApplyJsonAsync(json)` - restores matching state objects from JSON.
+- `CaptureSceneSnapshot()` - returns the snapshot object before serialization.
+- `ApplySceneSnapshotAsync(snapshot)` - restores from a snapshot object.
+
+Amaryllis does not write saves to disk, `PlayerPrefs`, cloud, profiles, or databases. The game layer owns storage. Use `CaptureJson()` when you want to save and pass that string to your own save system. Use `ApplyJsonAsync(json)` after your game layer loads the string back.
 
 ## Network Layer
 
