@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -39,11 +40,11 @@ namespace Amaryllis.EntityActions
             _startVolume = _audioSource.volume;
         }
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_delayTime > 0)
             {
-                await Task.Delay((int)(_delayTime * 1000));
+                await UniTask.Delay((int)(_delayTime * 1000), cancellationToken: cancellationToken);
             }
 
             if (_isSetLoop)
@@ -55,11 +56,10 @@ namespace Amaryllis.EntityActions
             
             Play();
 
-            Stop();
+            StopAsync(cancellationToken).Forget();
 
             Fade();
 
-            await Task.Yield();
             return true;
         }
 
@@ -79,11 +79,11 @@ namespace Amaryllis.EntityActions
             _audioSource.Play();
         }
 
-        private async void Stop()
+        private async UniTask StopAsync(CancellationToken cancellationToken)
         {
             if (_stopTime > 0)
             {
-                await Task.Delay((int)(_stopTime * 1000));
+                await UniTask.Delay((int)(_stopTime * 1000), cancellationToken: cancellationToken);
                 
                 _audioSource.Stop();
             }

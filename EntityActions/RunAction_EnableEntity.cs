@@ -1,6 +1,7 @@
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -13,7 +14,7 @@ namespace Amaryllis.EntityActions
         [SerializeField] private GameObject _entityObject;
         [SerializeField] private bool _isEnable = true;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             //var sceneEntity = _entityObject.GetComponent<ISceneEntity>();
             
@@ -25,9 +26,7 @@ namespace Amaryllis.EntityActions
             //         sceneEntity.SetDisable();
             // }              
             
-            await Task.Yield();
-            
-            return true;
+            return UniTask.FromResult(true);
         }
     }
 }

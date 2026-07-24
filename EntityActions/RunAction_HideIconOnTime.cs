@@ -1,7 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Logs;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -13,12 +14,11 @@ namespace Amaryllis.EntityActions
         [SerializeField]
         private float _hideTime;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             AmaryllisLog.Log("!!! [RunAction_HideIconOnTime] Empty !!!");
 
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
     }
 }

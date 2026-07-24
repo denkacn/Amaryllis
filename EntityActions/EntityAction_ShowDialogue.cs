@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -16,17 +17,16 @@ namespace Amaryllis.EntityActions
         [SerializeField] private BaseRunAction[] _startDialogueAction;
         [SerializeField] private BaseRunAction[] _endDialogueAction;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            ShowDialogue(entity);
+            await ShowDialogue(entity, cancellationToken);
 
-            await Task.Yield();
             return true;
         }
 
-        private void ShowDialogue(IEntity entity)
+        private async UniTask ShowDialogue(IEntity entity, CancellationToken cancellationToken)
         {
-            RunAction(_startDialogueAction, entity);
+            await RunAction(_startDialogueAction, entity, cancellationToken);
             
             // GameSceneManager.Inst.UiManager.ShowDialogueMessage(_messageLocId,
             //     GameSceneManager.Inst.EntitysManager.GetMainCharacter().transform, () =>
@@ -35,13 +35,16 @@ namespace Amaryllis.EntityActions
             //     }); 
         }
 
-        private void RunAction(BaseRunAction[] actionList, IEntity entity)
+        private async UniTask RunAction(BaseRunAction[] actionList, IEntity entity, CancellationToken cancellationToken)
         {
             if (actionList == null || actionList.Length == 0) return;
             
             foreach (var action in actionList)
             {
-                action.Run(entity);
+                if (action != null)
+                {
+                    await action.Run(entity, cancellationToken);
+                }
             }
         }
     }

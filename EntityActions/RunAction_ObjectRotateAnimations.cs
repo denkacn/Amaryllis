@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -32,33 +33,49 @@ namespace Amaryllis.EntityActions
             _startRotation = _target.localEulerAngles;
         }
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_delay > 0)
             {
-                await Task.Delay((int)(_delay * 1000));
+                await UniTask.Delay((int)(_delay * 1000), cancellationToken: cancellationToken);
             }
             
             var animator = _target.GetComponent<Animator>();
             if (animator != null) animator.enabled = false;
 
-            _target.DOLocalRotate(_openRotation, _duration).SetEase(Ease.Linear).OnComplete(() =>
+            await AwaitTween(_target.DOLocalRotate(_openRotation, _duration)
+                .SetEase(Ease.Linear), cancellationToken);
+
+            if (_returnToStart)
             {
-                if (_returnToStart)
-                {
-                    _target.DOLocalRotate(_startRotation, _backDuration).SetDelay(_duration + 2).OnComplete(() =>
-                    {
-                        if (animator != null) animator.enabled = true;
-                    });
-                }
-                else
-                {
-                    if (animator != null) animator.enabled = true;
-                }
-            });
+                await UniTask.Delay((int)((_duration + 2f) * 1000), cancellationToken: cancellationToken);
+                await AwaitTween(_target.DOLocalRotate(_startRotation, _backDuration), cancellationToken);
+            }
+
+            if (animator != null) animator.enabled = true;
         
-            await Task.Yield();
             return true;
+        }
+
+        private static async UniTask AwaitTween(Tween tween, CancellationToken cancellationToken)
+        {
+            var completion = new UniTaskCompletionSource();
+
+            tween.OnComplete(() => completion.TrySetResult());
+            tween.OnKill(() => completion.TrySetResult());
+
+            using (cancellationToken.Register(() =>
+                   {
+                       if (tween.IsActive())
+                       {
+                           tween.Kill();
+                       }
+                   }))
+            {
+                await completion.Task;
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
         }
     }
 }

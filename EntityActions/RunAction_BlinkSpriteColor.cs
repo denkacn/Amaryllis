@@ -1,7 +1,7 @@
-﻿using System.Collections;
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -29,32 +29,34 @@ namespace Amaryllis.EntityActions
         private Color _startColor;
         private Color _startColorEmission;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_target != null)
             {
                 _startColor = _target.material.color;
                 _startColorEmission = _target.material.GetColor("_EmissionColor");
                 
-                StartCoroutine(BlinkLogic());
+                await BlinkLogic(cancellationToken);
                 
-                await Task.Delay(_waitDelay);
+                if (_waitDelay > 0)
+                {
+                    await UniTask.Delay(_waitDelay, cancellationToken: cancellationToken);
+                }
             }
         
-            await Task.Yield();
             return true;
         }
 
-        private IEnumerator BlinkLogic()
+        private async UniTask BlinkLogic(CancellationToken cancellationToken)
         {
             var count = 0;
             while (_blinkCount > count)
             {
                 SetColor(_toColor,_toColor);
-                yield return new WaitForSeconds(_blinkTime);
+                await UniTask.Delay((int)(_blinkTime * 1000), cancellationToken: cancellationToken);
                 
                 SetColor(_startColor, _startColorEmission);
-                yield return new WaitForSeconds(_blinkTime);
+                await UniTask.Delay((int)(_blinkTime * 1000), cancellationToken: cancellationToken);
                 
                 count++;
             }   

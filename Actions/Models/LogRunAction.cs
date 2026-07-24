@@ -1,6 +1,7 @@
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Logs;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.Actions.Models
@@ -8,13 +9,11 @@ namespace Amaryllis.Actions.Models
     public class LogRunAction : BaseRunAction
     {
         [SerializeField] private string _logText;
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            await Task.Yield();
-
             AmaryllisLog.Log($"[LogRunAction] {_logText}");
 
-            return true;
+            return UniTask.FromResult(true);
         }
     }
 }

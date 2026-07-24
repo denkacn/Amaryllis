@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -21,7 +22,7 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private bool _setEmission = true;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             SetColor(_target, _toColor);
 
@@ -30,8 +31,7 @@ namespace Amaryllis.EntityActions
                 SetColor(r, _toColor);
             }
         
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
 
         private void SetColor(Renderer r, Color c)

@@ -1,8 +1,8 @@
-﻿using System;
-using System.Collections;
-using System.Threading.Tasks;
+using System;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -22,38 +22,22 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private RunAction_ObjectEnableDisableItem[] _items;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            if (_delayTime == 0)
+            if (_delayTime > 0)
             {
-                if (_target != null)
-                {
-                    _target.gameObject.SetActive(_setState);
-                }
-
-                SetItemState();
+                await UniTask.Delay(TimeSpan.FromSeconds(_delayTime), cancellationToken: cancellationToken);
             }
-            else
-            {
-                StartCoroutine(WaitAndDo());
-            }
-
-            await Task.Yield();
-            return true;
-        }
-
-        private IEnumerator WaitAndDo()
-        {
-            yield return new WaitForSeconds(_delayTime);
             
             if (_target != null)
             {
                 _target.gameObject.SetActive(_setState);
             }
-            
-            SetItemState();
-        }
 
+            SetItemState();
+
+            return true;
+        }
 
         private void SetItemState()
         {

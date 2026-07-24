@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Helpers;
 using Amaryllis.Actions.Interfaces;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Logs;
 using Amaryllis.States.Interfaces;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.States.Models
@@ -21,45 +22,45 @@ namespace Amaryllis.States.Models
         private List<IRunAction> _actions;
         private List<IStateCondition> _conditions;
 
-        public async Task PreInitAsync()
+        public async UniTask PreInitAsync(CancellationToken cancellationToken = default)
         {
             AmaryllisLog.Log($@"[StateObjectBase] PreInit {_stateId}");
 
              _actions = GetComponentsInChildren<IRunAction>().ToList();
              _conditions = GetComponentsInChildren<IStateCondition>().ToList();
              
-             await RunActionLogicHelper.RunActionsAsync(ExecTimeType.PreInit, null, _actions);
+             await RunActionLogicHelper.RunActionsAsync(ExecTimeType.PreInit, null, _actions, cancellationToken);
         }
 
-        public async Task InitAsync()
+        public async UniTask InitAsync(CancellationToken cancellationToken = default)
         {
             AmaryllisLog.Log($@"[StateObjectBase] Init {_stateId}");
 
-            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Init, null, _actions);
+            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Init, null, _actions, cancellationToken);
         }
 
-        public async Task<bool> ExecAsync(IEntity entity)
+        public async UniTask<bool> ExecAsync(IEntity entity, CancellationToken cancellationToken = default)
         {
             AmaryllisLog.Log($@"[StateObjectBase] Exec {_stateId}");
 
-            var result = await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Exec, entity, _actions);
+            var result = await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Exec, entity, _actions, cancellationToken);
 
             return result;
         }
 
-        public async Task DiscardAsync()
+        public async UniTask DiscardAsync(CancellationToken cancellationToken = default)
         {
             AmaryllisLog.Log($@"[StateObjectBase] Discard {_stateId}");
             
-            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Discard, null, _actions);
+            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.Discard, null, _actions, cancellationToken);
         }
         
-        public void PostDiscard()
+        public async UniTask PostDiscardAsync(CancellationToken cancellationToken = default)
         {
             AmaryllisLog.Log($@"[StateObjectBase] PostDiscard {_stateId}");
             AmaryllisLog.Log("------------------------------------------");
             
-            RunActionLogicHelper.RunActionsAsync(ExecTimeType.PostDiscard, null, _actions);
+            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.PostDiscard, null, _actions, cancellationToken);
         }
 
         public bool IsReadyForExec(IEntity entity)
@@ -75,9 +76,9 @@ namespace Amaryllis.States.Models
             return true;
         }
 
-        public async Task RunConditionFailActions(IEntity entity)
+        public async UniTask RunConditionFailActions(IEntity entity, CancellationToken cancellationToken = default)
         {
-            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.ConditionFail, entity, _actions);
+            await RunActionLogicHelper.RunActionsAsync(ExecTimeType.ConditionFail, entity, _actions, cancellationToken);
         }
     }
 }

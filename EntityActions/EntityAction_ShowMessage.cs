@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -17,12 +18,11 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private AudioClip _clip;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {            
             ShowMessage();
             
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
 
         private void ShowMessage()

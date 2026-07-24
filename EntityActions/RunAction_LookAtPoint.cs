@@ -1,8 +1,9 @@
 using System;
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Entities.Models;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -19,18 +20,17 @@ namespace Amaryllis.EntityActions
         [SerializeField]
         private float _delay;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_delay > 0)
             {
-                await Task.Delay(TimeSpan.FromSeconds(_delay));
+                await UniTask.Delay(TimeSpan.FromSeconds(_delay), cancellationToken: cancellationToken);
             }
             
             var character = entity as CharacterBaseEntity;
             
             character.LookAtPoint(_pointToLook.position, _lookTime);
             
-            await Task.Yield();
             return true;
         }
     }

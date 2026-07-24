@@ -1,8 +1,9 @@
-﻿using System.Collections;
-using System.Threading.Tasks;
+using System;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Entities.Models;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -15,23 +16,17 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private float _lockTime;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
-        {
-            StartCoroutine(LockCharacterAtTime(entity));
-            
-            await Task.Yield();
-            return true;
-        }
-
-        private IEnumerator LockCharacterAtTime(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             var character = entity as CharacterBaseEntity;
             
-            if (character == null) yield break;
+            if (character == null) return true;
             
             character.SetEnableControl(false);
-            yield return new WaitForSeconds(_lockTime);
+            await UniTask.Delay(TimeSpan.FromSeconds(_lockTime), cancellationToken: cancellationToken);
             character.SetEnableControl(true);
+            
+            return true;
         }
     }
 }

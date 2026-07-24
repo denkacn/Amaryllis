@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -25,11 +26,11 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private bool _isEnableInEnd = false;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_delayTime > 0)
             {
-                await Task.Delay((int)(_delayTime * 1000));
+                await UniTask.Delay((int)(_delayTime * 1000), cancellationToken: cancellationToken);
             }
 
             var endTime = Time.time + _blinkTime;
@@ -37,7 +38,7 @@ namespace Amaryllis.EntityActions
 
             while (endTime > Time.time)
             {
-                await Task.Delay(Random.Range(30, 100));
+                await UniTask.Delay(Random.Range(30, 100), cancellationToken: cancellationToken);
 
                 isEnable = !isEnable;
 
@@ -46,7 +47,6 @@ namespace Amaryllis.EntityActions
             
             SetLight(_isEnableInEnd);
 
-            await Task.Yield();
             return true;
         }
 

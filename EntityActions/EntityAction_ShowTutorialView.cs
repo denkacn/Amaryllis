@@ -1,6 +1,7 @@
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -10,21 +11,19 @@ namespace Amaryllis.EntityActions
     {
         [ShowInInspector, PropertySpace]
         
-        
         [SerializeField] 
         private string[] _tutorialsId;
 
         private int _index = 0;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             ShowTutorial();
             
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
 
-        private async void ShowTutorial()
+        private void ShowTutorial()
         {
             ShowNext();
         }

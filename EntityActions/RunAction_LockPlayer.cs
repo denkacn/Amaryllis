@@ -1,7 +1,8 @@
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Entities.Models;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.EntityActions
@@ -10,16 +11,15 @@ namespace Amaryllis.EntityActions
     {
         [SerializeField] private bool _isLock = false;
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            if (entity == null) return true;
+            if (entity == null) return UniTask.FromResult(true);
             
             var character = entity as CharacterBaseEntity;
             
             character.SetEnableControl(!_isLock);
             
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
     }
 }

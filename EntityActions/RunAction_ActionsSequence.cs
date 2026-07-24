@@ -1,8 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.EntityActions
@@ -11,17 +12,29 @@ namespace Amaryllis.EntityActions
     {
         [SerializeField] private List<ActionsSequenceItem> _actionItems;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
+            var isOk = true;
+            
             foreach (var item in _actionItems)
             {
-                await Task.Delay(TimeSpan.FromSeconds(item.PreDaley));
+                cancellationToken.ThrowIfCancellationRequested();
                 
-                await item.RunAction.Run(entity);
+                if (item.PreDaley > 0)
+                {
+                    await UniTask.Delay(TimeSpan.FromSeconds(item.PreDaley), cancellationToken: cancellationToken);
+                }
+
+                if (item.RunAction == null)
+                {
+                    isOk = false;
+                    continue;
+                }
+                
+                isOk &= await item.RunAction.Run(entity, cancellationToken);
             }
             
-            await Task.Yield();
-            return true;
+            return isOk;
         }
     }
 

@@ -1,6 +1,7 @@
 using System;
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 
 namespace Amaryllis.States.Interfaces
 {
@@ -14,8 +15,8 @@ namespace Amaryllis.States.Interfaces
         int CurrentStateId { get; }
         
         void Init();
-        Task Exec(IEntity entity, bool isCheckConditions = true);
-        Task MoveToStateByIdAsync(int stateId);
-        Task ConditionFailAsync(IEntity entity);
+        UniTask InitAsync(CancellationToken cancellationToken = default);
+        UniTask MoveToStateByIdAsync(int stateId, CancellationToken cancellationToken = default);
+        UniTask ConditionFailAsync(IEntity entity, CancellationToken cancellationToken = default);
     }
 }

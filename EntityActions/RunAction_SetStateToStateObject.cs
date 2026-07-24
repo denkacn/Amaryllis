@@ -1,7 +1,8 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.States.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -18,35 +19,23 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private float _delayTime = 0;
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            if (_delayTime == 0)
+            if (_delayTime > 0)
             {
-                SetState();
-            }
-            else
-            {
-                WaitAndSetState();
+                await UniTask.Delay((int)(_delayTime * 1000), cancellationToken: cancellationToken);
             }
 
-            await Task.Yield();
+            await SetState(cancellationToken);
             return true;
         }
-        
-        private async void WaitAndSetState()
-        {
-            var waitTime = (int)(_delayTime * 1000);
-            await Task.Delay(waitTime);
-
-            SetState();
-        }
                                                       
-        private void SetState()
+        private async UniTask SetState(CancellationToken cancellationToken)
         {
             var stateOwner = _iEOStateOwner.GetComponent<IStatesObject>();
             if (stateOwner != null)
             {
-                stateOwner.MoveToStateByIdAsync(_toStateId);
+                await stateOwner.MoveToStateByIdAsync(_toStateId, cancellationToken);
             }
         }
     }

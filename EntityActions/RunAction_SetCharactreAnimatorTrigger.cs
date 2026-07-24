@@ -1,8 +1,9 @@
-﻿using System;
-using System.Threading.Tasks;
+using System;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Entities.Models;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -19,17 +20,16 @@ namespace Amaryllis.EntityActions
         [SerializeField] 
         private bool IsWaitEndLockTime = false;
        
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             var character = entity as CharacterBaseEntity;
             character.SetAnimationTrigger(SetTriggerName, LockTime);
 
             if (IsWaitEndLockTime)
             {
-                await Task.Delay(TimeSpan.FromSeconds(LockTime));
+                await UniTask.Delay(TimeSpan.FromSeconds(LockTime), cancellationToken: cancellationToken);
             }
             
-            await Task.Yield();
             return true;
         }
     }

@@ -1,5 +1,6 @@
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.States.Interfaces;
+using Cysharp.Threading.Tasks;
 
 namespace Amaryllis.Entities.Models
 {
@@ -21,9 +22,9 @@ namespace Amaryllis.Entities.Models
             base.Create(entityId);
         }
 
-        public void Exec(IEntity entity)
+        public UniTask Exec(IEntity entity)
         {
-            _statesObject.Exec(entity);
+            return _statesObject.Exec(entity);
         }
 
         private void InitStatesObject()

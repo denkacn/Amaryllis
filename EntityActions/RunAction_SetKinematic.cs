@@ -1,6 +1,7 @@
-﻿using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -18,27 +19,15 @@ namespace Amaryllis.EntityActions
         private Rigidbody _rigidbody;
         
 
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override async UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
-            if (_delayTime == 0)
+            if (_delayTime > 0)
             {
-                Set();
+                await UniTask.Delay((int)(_delayTime * 1000), cancellationToken: cancellationToken);
             }
-            else
-            {
-                WaitAndSet();
-            }
-
-            await Task.Yield();
-            return true;
-        }
-
-        private async void WaitAndSet()
-        {
-            var waitTime = (int)(_delayTime * 1000);
-            await Task.Delay(waitTime);
-
+            
             Set();
+            return true;
         }
 
         private void Set()

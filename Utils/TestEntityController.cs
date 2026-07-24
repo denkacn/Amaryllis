@@ -1,5 +1,6 @@
 using System.Collections;
 using Amaryllis.Entities.Models;
+using Cysharp.Threading.Tasks;
 using Sirenix.OdinInspector;
 using UnityEngine;
 
@@ -21,17 +22,17 @@ namespace Amaryllis.Utils
         {
             yield return new WaitForSeconds(1);
             
-            _hasStateEntity.Exec(null);
+            _hasStateEntity.Exec(null).Forget(Debug.LogException);
             
             yield return new WaitForSeconds(1);
             
-            _hasStateEntity.Exec(null);
+            _hasStateEntity.Exec(null).Forget(Debug.LogException);
         }
 
         [Button]
         private void MoveToNextState()
         {
-            _hasStateEntity.Exec(null);
+            _hasStateEntity.Exec(null).Forget(Debug.LogException);
         }
     }
 }

@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
+using System;
+using System.Threading;
 using Amaryllis.Actions.Interfaces;
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.States.Models;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.Actions.Models
@@ -20,23 +22,33 @@ namespace Amaryllis.Actions.Models
         public int ExecPriority => _execPriority;
         public ExecTimeType ExecTime => _execTimeType;
 
-        public virtual async Task<bool> Run(IEntity entity)
+        public virtual async UniTask<bool> Run(IEntity entity, CancellationToken cancellationToken = default)
         {
-            if (!_isEnable) return false;
+            if (!_isEnable) return true;
             if (!IsCanRun(entity)) return false;
-            
-            await Task.Delay(_startDelayMs);
-            
-            var result = await RunLogic(entity);
-            
-            return result;
+
+            using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, this.GetCancellationTokenOnDestroy());
+
+            try
+            {
+                if (_startDelayMs > 0)
+                {
+                    await UniTask.Delay(_startDelayMs, cancellationToken: linkedCancellation.Token);
+                }
+                
+                return await RunLogic(entity, linkedCancellation.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
         }
 
-        protected abstract Task<bool> RunLogic(IEntity entity);
+        protected abstract UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken);
 
         private bool IsCanRun(IEntity entity)
         {
-            return _runActionConditions.All(condition => condition.IsCanRun(entity));
+            return _runActionConditions == null || _runActionConditions.All(condition => condition.IsCanRun(entity));
         }
     }
 }

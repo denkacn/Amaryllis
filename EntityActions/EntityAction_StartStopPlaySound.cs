@@ -1,6 +1,7 @@
-using System.Threading.Tasks;
+using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
+using Cysharp.Threading.Tasks;
 using DG.Tweening;
 using Sirenix.OdinInspector;
 using UnityEngine;
@@ -28,7 +29,7 @@ namespace Amaryllis.EntityActions
             }
         }
         
-        protected override async Task<bool> RunLogic(IEntity entity)
+        protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_isPlay)
             {
@@ -43,8 +44,7 @@ namespace Amaryllis.EntityActions
                 });
             }
 
-            await Task.Yield();
-            return true;
+            return UniTask.FromResult(true);
         }
     }
 }
