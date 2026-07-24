@@ -1,8 +1,9 @@
+using Amaryllis.Entities.Interfaces;
 using UnityEngine;
 
 namespace Amaryllis.Entities.Models
 {
-    public class CharacterBaseEntity : SimpleEntity
+    public class CharacterBaseEntity : SimpleEntity, ICharacterActionTarget
     {
         public virtual void SetEnableControl(bool isEnable){}
 

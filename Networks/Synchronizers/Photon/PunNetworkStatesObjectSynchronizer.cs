@@ -1,66 +1,104 @@
+using System;
 using Amaryllis.Entities.Managers;
 using Amaryllis.Logs;
 using Amaryllis.States.Interfaces;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 
 namespace Amaryllis.Networks.Synchronizers.Photon
 {
+    public interface INetworkStatesObjectTransport
+    {
+        bool IsWriteAuthority { get; }
+        event Action<string> ExecReceived;
+        event Action<string> ConditionFailReceived;
+        void SendExec(string executorId);
+        void SendConditionFail(string executorId);
+    }
+
     [RequireComponent(typeof(IStatesObject))]
     public class PunNetworkStatesObjectSynchronizer : MonoBehaviour
     {
-        //[SerializeField] private PhotonView _photonView;
+        [SerializeField] private MonoBehaviour _transportBehaviour;
         
         private IStatesObject _statesObject;
+        private INetworkStatesObjectTransport _transport;
 
         private void Awake()
         {
             _statesObject = GetComponentInChildren<IStatesObject>();
-            _statesObject.OnInitHandler += () =>
-            {
-                /*if (PhotonNetwork.isMasterClient)
-                {
-                    if (_statesObject != null)
-                    {
-                        _statesObject.OnExecHandler += OnStatesObjectExec;
-                        _statesObject.OnConditionFailHandler += OnStatesObjectConditionFail;
-                    }
-                }*/
-            };
+            _transport = _transportBehaviour as INetworkStatesObjectTransport;
         }
 
-        /*private void OnStatesObjectExec(string executorId)
+        private void OnEnable()
         {
-            if (_photonView != null)
+            if (_statesObject != null)
             {
-                AmaryllisLog.Log("[PunNetworkStatesObjectSynchronizer] OnStatesObjectExec: " + executorId);
-
-                _photonView.RPC(nameof(StatesObjectExecRpc), PhotonTargets.OthersBuffered, executorId);
+                _statesObject.OnInitHandler += SubscribeLocalStateEvents;
             }
-        }*/
 
-        /*[PunRPC]
-        private void StatesObjectExecRpc(string executorId)
+            if (_transport != null)
+            {
+                _transport.ExecReceived += OnRemoteExec;
+                _transport.ConditionFailReceived += OnRemoteConditionFail;
+            }
+        }
+
+        private void OnDisable()
         {
-            AmaryllisLog.Log("[PunNetworkStatesObjectSynchronizer] StatesObjectExecRpc: _statesObject = " + _statesObject);
+            if (_statesObject != null)
+            {
+                _statesObject.OnInitHandler -= SubscribeLocalStateEvents;
+                _statesObject.OnExecHandler -= OnLocalExec;
+                _statesObject.OnConditionFailHandler -= OnLocalConditionFail;
+            }
+
+            if (_transport != null)
+            {
+                _transport.ExecReceived -= OnRemoteExec;
+                _transport.ConditionFailReceived -= OnRemoteConditionFail;
+            }
+        }
+
+        private void SubscribeLocalStateEvents()
+        {
+            if (_statesObject == null || _transport == null || !_transport.IsWriteAuthority)
+            {
+                return;
+            }
+
+            _statesObject.OnExecHandler -= OnLocalExec;
+            _statesObject.OnConditionFailHandler -= OnLocalConditionFail;
+            _statesObject.OnExecHandler += OnLocalExec;
+            _statesObject.OnConditionFailHandler += OnLocalConditionFail;
+        }
+
+        private void OnLocalExec(string executorId)
+        {
+            AmaryllisLog.Log("[NetworkStatesObjectSynchronizer] Local exec: " + executorId);
+            _transport?.SendExec(executorId);
+        }
+
+        private void OnLocalConditionFail(string executorId)
+        {
+            AmaryllisLog.Log("[NetworkStatesObjectSynchronizer] Local condition fail: " + executorId);
+            _transport?.SendConditionFail(executorId);
+        }
+
+        private void OnRemoteExec(string executorId)
+        {
+            AmaryllisLog.Log("[NetworkStatesObjectSynchronizer] Remote exec: " + executorId);
             
             var entity = EntitiesManager.Get(executorId);
-            _statesObject?.Exec(entity, false);
+            _statesObject?.Exec(entity, false, this.GetCancellationTokenOnDestroy()).Forget();
         }
         
-        private void OnStatesObjectConditionFail(string executorId)
+        private void OnRemoteConditionFail(string executorId)
         {
-            AmaryllisLog.Log("[PunNetworkStatesObjectSynchronizer] OnStatesObjectConditionFail: " + executorId);
-
-            _photonView.RPC(nameof(StatesObjectConditionFail), PhotonTargets.OthersBuffered, executorId);
-        }
-        
-        [PunRPC]
-        private void StatesObjectConditionFail(string executorId)
-        {
-            AmaryllisLog.Log("[PunNetworkStatesObjectSynchronizer] StatesObjectExecRpc: _statesObject = " + _statesObject);
+            AmaryllisLog.Log("[NetworkStatesObjectSynchronizer] Remote condition fail: " + executorId);
             
             var entity = EntitiesManager.Get(executorId);
-            _statesObject?.ConditionFailAsync(entity);
-        }*/
+            _statesObject?.ConditionFailAsync(entity, this.GetCancellationTokenOnDestroy()).Forget();
+        }
     }
 }

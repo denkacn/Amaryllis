@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 
 namespace Amaryllis.Entities.Interfaces
 {
@@ -13,5 +14,12 @@ namespace Amaryllis.Entities.Interfaces
         void Create(string entityId);
         void Init();
         void Discard();
+    }
+
+    public interface ICharacterActionTarget
+    {
+        void SetEnableControl(bool isEnable);
+        void LookAtPoint(Vector3 point, float lookTime);
+        void SetAnimationTrigger(string triggerName, float lockTime);
     }
 }
