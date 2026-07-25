@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+#if UNITY_EDITOR
+using Amaryllis.Debugging;
+#endif
 using Amaryllis.Entities.Interfaces;
 using Amaryllis.Logs;
 using Amaryllis.Persistence;
@@ -176,6 +179,7 @@ namespace Amaryllis.States.Models
             var oldStateCancellation = _stateCancellationTokenSource;
             _stateCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(linkedCancellation.Token);
             oldStateCancellation?.Cancel();
+            var previousStateId = CurrentStateId;
 
             try
             {
@@ -185,6 +189,9 @@ namespace Amaryllis.States.Models
                 await InitNewStateAsync(stateId, _stateCancellationTokenSource.Token);
                 
                 OnStateChangedHandler?.Invoke(stateId);
+#if UNITY_EDITOR
+                AmaryllisDebugEvents.RaiseStateChanged(this, previousStateId, stateId);
+#endif
                 
                 AmaryllisLog.Log($@"[StatesObjectBase] MoveToState {stateId} End");
             }

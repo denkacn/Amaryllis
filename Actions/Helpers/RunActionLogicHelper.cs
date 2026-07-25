@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+#if UNITY_EDITOR
+using Amaryllis.Debugging;
+#endif
 using Amaryllis.Actions.Interfaces;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
@@ -25,8 +29,32 @@ namespace Amaryllis.Actions.Helpers
             foreach (var action in correctAction)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                
-                var result = await action.Run(entity, cancellationToken);
+
+#if UNITY_EDITOR
+                AmaryllisDebugEvents.RaiseActionStarted(action, execTime);
+#endif
+                RunActionResult result;
+                try
+                {
+                    result = await action.Run(entity, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+#if UNITY_EDITOR
+                    AmaryllisDebugEvents.RaiseActionFinished(action, execTime, RunActionResult.Canceled);
+#endif
+                    throw;
+                }
+                catch
+                {
+#if UNITY_EDITOR
+                    AmaryllisDebugEvents.RaiseActionFinished(action, execTime, RunActionResult.Failed);
+#endif
+                    throw;
+                }
+#if UNITY_EDITOR
+                AmaryllisDebugEvents.RaiseActionFinished(action, execTime, result);
+#endif
                 
                 if (result == RunActionResult.Failed || result == RunActionResult.Canceled)
                 {

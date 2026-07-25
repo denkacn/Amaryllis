@@ -1,4 +1,6 @@
 using Amaryllis.Entities.Models;
+using Amaryllis.Actions.Models;
+using Amaryllis.Debugging;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -16,10 +18,17 @@ namespace Amaryllis.Editor.StateDebugWindow
         private const float CanvasPadding = 32f;
         private const float StateHorizontalSpacing = 34f;
         private const float StateVerticalSpacing = 42f;
+        private const int MaxTimelineEntries = 80;
 
         private HasStateEntity _targetEntity;
         private bool _isTargetLocked;
         private Vector2 _scrollPosition;
+        private Vector2 _timelineScrollPosition;
+        private readonly HashSet<Component> _runningActionComponents = new HashSet<Component>();
+        private readonly Dictionary<Component, RunActionResult> _lastActionResults = new Dictionary<Component, RunActionResult>();
+        private readonly List<DebugTimelineEntry> _timelineEntries = new List<DebugTimelineEntry>();
+        private int _previousStateId = -1;
+        private double _lastStateChangeTime;
 
         public static void Open(HasStateEntity entity)
         {
@@ -38,6 +47,11 @@ namespace Amaryllis.Editor.StateDebugWindow
         private void OnEnable()
         {
             Selection.selectionChanged += OnSelectionChanged;
+            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            AmaryllisDebugEvents.StateChanged += OnStateChanged;
+            AmaryllisDebugEvents.ActionStarted += OnActionStarted;
+            AmaryllisDebugEvents.ActionFinished += OnActionFinished;
+
             if (_targetEntity == null)
             {
                 SetTarget(GetSelectedEntity());
@@ -47,6 +61,18 @@ namespace Amaryllis.Editor.StateDebugWindow
         private void OnDisable()
         {
             Selection.selectionChanged -= OnSelectionChanged;
+            EditorApplication.playModeStateChanged -= OnPlayModeStateChanged;
+            AmaryllisDebugEvents.StateChanged -= OnStateChanged;
+            AmaryllisDebugEvents.ActionStarted -= OnActionStarted;
+            AmaryllisDebugEvents.ActionFinished -= OnActionFinished;
+        }
+
+        private void OnInspectorUpdate()
+        {
+            if (EditorApplication.isPlaying)
+            {
+                Repaint();
+            }
         }
 
         private void OnGUI()
@@ -56,6 +82,8 @@ namespace Amaryllis.Editor.StateDebugWindow
 
             var graph = StateDebugAdapter.Build(_targetEntity);
             DrawTargetInfo(graph);
+            EditorGUILayout.Space(8f);
+            DrawTimeline();
             EditorGUILayout.Space(8f);
             DrawGraph(graph);
         }
@@ -105,8 +133,45 @@ namespace Amaryllis.Editor.StateDebugWindow
                     return;
                 }
 
-                EditorGUILayout.ObjectField("States Object", graph.StatesObject, typeof(Object), true);
+                EditorGUILayout.ObjectField("States Object", graph.StatesObject, typeof(UnityEngine.Object), true);
                 EditorGUILayout.LabelField("States", graph.States.Count.ToString());
+            }
+        }
+
+        private void DrawTimeline()
+        {
+            using (new EditorGUILayout.VerticalScope(EditorStyles.helpBox))
+            {
+                using (new EditorGUILayout.HorizontalScope())
+                {
+                    EditorGUILayout.LabelField("Timeline", EditorStyles.boldLabel);
+
+                    using (new EditorGUI.DisabledScope(_timelineEntries.Count == 0))
+                    {
+                        if (GUILayout.Button("Clear", GUILayout.Width(60f)))
+                        {
+                            _timelineEntries.Clear();
+                            Repaint();
+                        }
+                    }
+                }
+
+                if (_timelineEntries.Count == 0)
+                {
+                    EditorGUILayout.LabelField("No debug events yet.", EditorStyles.miniLabel);
+                    return;
+                }
+
+                _timelineScrollPosition = EditorGUILayout.BeginScrollView(_timelineScrollPosition, GUILayout.Height(112f));
+                foreach (var entry in _timelineEntries)
+                {
+                    var color = GUI.color;
+                    GUI.color = entry.Color;
+                    EditorGUILayout.LabelField(entry.Text, EditorStyles.miniLabel);
+                    GUI.color = color;
+                }
+
+                EditorGUILayout.EndScrollView();
             }
         }
 
@@ -248,11 +313,12 @@ namespace Amaryllis.Editor.StateDebugWindow
             GUI.Label(new Rect(inner.x, inner.y + 44f, inner.width, 18f), graph.StatesObject.name, EditorStyles.miniLabel);
         }
 
-        private static void DrawStateNode(StateDebugGraphModel graph, StateDebugNodeModel state, Rect rect)
+        private void DrawStateNode(StateDebugGraphModel graph, StateDebugNodeModel state, Rect rect)
         {
             var isCurrent = graph.StatesObject.CurrentStateId == state.StateId;
+            var isPrevious = state.StateId == _previousStateId && EditorApplication.timeSinceStartup - _lastStateChangeTime < 0.6d;
             var backgroundColor = GUI.backgroundColor;
-            GUI.backgroundColor = isCurrent ? new Color(0.45f, 0.95f, 0.55f) : backgroundColor;
+            GUI.backgroundColor = isCurrent ? new Color(0.35f, 1f, 0.48f) : isPrevious ? new Color(1f, 0.82f, 0.35f) : backgroundColor;
             GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
             GUI.backgroundColor = backgroundColor;
 
@@ -273,19 +339,38 @@ namespace Amaryllis.Editor.StateDebugWindow
             foreach (var action in state.Actions)
             {
                 var actionRect = new Rect(inner.x, actionsY, inner.width, ActionRowHeight);
-                DrawActionRow(actionRect, action);
+                var isRunning = action.Component != null && _runningActionComponents.Contains(action.Component);
+                var lastResult = default(RunActionResult);
+                var hasLastResult = action.Component != null && _lastActionResults.TryGetValue(action.Component, out lastResult);
+                DrawActionRow(actionRect, action, isRunning, hasLastResult, lastResult);
                 actionsY += ActionRowHeight;
             }
         }
 
-        private static void DrawActionRow(Rect rect, StateDebugActionModel action)
+        private static void DrawActionRow(Rect rect, StateDebugActionModel action, bool isRunning, bool hasLastResult, RunActionResult lastResult)
         {
-            var label = $"{action.ExecTime} | {action.Priority} | {action.Name}";
+            var backgroundColor = GUI.backgroundColor;
+            if (isRunning)
+            {
+                GUI.backgroundColor = new Color(0.35f, 0.72f, 1f);
+            }
+            else if (hasLastResult && (lastResult == RunActionResult.Failed || lastResult == RunActionResult.Canceled))
+            {
+                GUI.backgroundColor = new Color(1f, 0.45f, 0.45f);
+            }
+
+            var status = isRunning ? "RUN" : hasLastResult ? lastResult.ToString() : string.Empty;
+            var label = string.IsNullOrEmpty(status)
+                ? $"{action.ExecTime} | {action.Priority} | {action.Name}"
+                : $"{action.ExecTime} | {action.Priority} | {status} | {action.Name}";
+
             if (GUI.Button(rect, label, EditorStyles.miniButtonLeft) && action.Component != null)
             {
                 Selection.activeObject = action.Component.gameObject;
                 EditorGUIUtility.PingObject(action.Component.gameObject);
             }
+
+            GUI.backgroundColor = backgroundColor;
         }
 
         private static Rect RectOffset(Rect rect, float horizontal, float vertical)
@@ -317,7 +402,97 @@ namespace Amaryllis.Editor.StateDebugWindow
         private void SetTarget(HasStateEntity entity)
         {
             _targetEntity = entity;
+            ClearLiveState();
             Repaint();
+        }
+
+        private void OnStateChanged(StateChangedDebugEvent debugEvent)
+        {
+            if (!IsEventForCurrentTarget(debugEvent))
+            {
+                return;
+            }
+
+            _previousStateId = debugEvent.PreviousStateId;
+            _lastStateChangeTime = EditorApplication.timeSinceStartup;
+            AddTimelineEntry(debugEvent.Time, $"State {debugEvent.PreviousStateId} -> {debugEvent.CurrentStateId}", new Color(0.36f, 0.9f, 0.42f));
+            Repaint();
+        }
+
+        private void OnActionStarted(ActionDebugEvent debugEvent)
+        {
+            if (!IsActionForCurrentTarget(debugEvent) || debugEvent.ActionComponent == null)
+            {
+                return;
+            }
+
+            _runningActionComponents.Add(debugEvent.ActionComponent);
+            _lastActionResults.Remove(debugEvent.ActionComponent);
+            AddTimelineEntry(debugEvent.Time, $"Action start [{debugEvent.ExecTime}] {debugEvent.ActionComponent.name}", new Color(0.35f, 0.72f, 1f));
+            Repaint();
+        }
+
+        private void OnActionFinished(ActionDebugEvent debugEvent)
+        {
+            if (!IsActionForCurrentTarget(debugEvent) || debugEvent.ActionComponent == null)
+            {
+                return;
+            }
+
+            _runningActionComponents.Remove(debugEvent.ActionComponent);
+            if (debugEvent.Result.HasValue)
+            {
+                _lastActionResults[debugEvent.ActionComponent] = debugEvent.Result.Value;
+            }
+
+            var resultText = debugEvent.Result.HasValue ? debugEvent.Result.Value.ToString() : "Unknown";
+            var color = debugEvent.Result == RunActionResult.Failed || debugEvent.Result == RunActionResult.Canceled
+                ? new Color(1f, 0.45f, 0.45f)
+                : new Color(0.72f, 0.72f, 0.72f);
+            AddTimelineEntry(debugEvent.Time, $"Action finish [{debugEvent.ExecTime}] {resultText} {debugEvent.ActionComponent.name}", color);
+            Repaint();
+        }
+
+        private void OnPlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.EnteredEditMode || state == PlayModeStateChange.ExitingPlayMode)
+            {
+                ClearLiveState();
+                Repaint();
+            }
+        }
+
+        private bool IsEventForCurrentTarget(StateChangedDebugEvent debugEvent)
+        {
+            return _targetEntity != null
+                   && debugEvent.StatesObject != null
+                   && debugEvent.StatesObject.GetComponentInParent<HasStateEntity>() == _targetEntity;
+        }
+
+        private bool IsActionForCurrentTarget(ActionDebugEvent debugEvent)
+        {
+            return _targetEntity != null
+                   && debugEvent.ActionComponent != null
+                   && debugEvent.ActionComponent.GetComponentInParent<HasStateEntity>() == _targetEntity;
+        }
+
+        private void ClearLiveState()
+        {
+            _runningActionComponents.Clear();
+            _lastActionResults.Clear();
+            _timelineEntries.Clear();
+            _timelineScrollPosition = Vector2.zero;
+            _previousStateId = -1;
+            _lastStateChangeTime = 0d;
+        }
+
+        private void AddTimelineEntry(double time, string message, Color color)
+        {
+            _timelineEntries.Insert(0, new DebugTimelineEntry($"[{time:0.000}] {message}", color));
+            if (_timelineEntries.Count > MaxTimelineEntries)
+            {
+                _timelineEntries.RemoveAt(_timelineEntries.Count - 1);
+            }
         }
 
         private static HasStateEntity GetSelectedEntity()
@@ -339,6 +514,18 @@ namespace Amaryllis.Editor.StateDebugWindow
             public Rect EntityRect { get; }
             public IReadOnlyDictionary<StateDebugNodeModel, Rect> StateRects { get; }
             public Vector2 ContentSize { get; }
+        }
+
+        private readonly struct DebugTimelineEntry
+        {
+            public DebugTimelineEntry(string text, Color color)
+            {
+                Text = text;
+                Color = color;
+            }
+
+            public string Text { get; }
+            public Color Color { get; }
         }
     }
 }
