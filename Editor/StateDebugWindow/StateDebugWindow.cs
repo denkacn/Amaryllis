@@ -1,6 +1,7 @@
 using Amaryllis.Entities.Models;
 using Amaryllis.Actions.Models;
 using Amaryllis.Debugging;
+using Amaryllis.States.Models;
 using System.Collections.Generic;
 using System.Linq;
 using UnityEditor;
@@ -20,8 +21,9 @@ namespace Amaryllis.Editor.StateDebugWindow
         private const float StateVerticalSpacing = 42f;
         private const int MaxTimelineEntries = 80;
 
-        private HasStateEntity _targetEntity;
-        private bool _isTargetLocked;
+        [SerializeField] private HasStateEntity _targetEntity;
+        [SerializeField] private bool _isTargetLocked;
+        [SerializeField] private string _targetGlobalId;
         private Vector2 _scrollPosition;
         private Vector2 _timelineScrollPosition;
         private readonly HashSet<Component> _runningActionComponents = new HashSet<Component>();
@@ -52,6 +54,7 @@ namespace Amaryllis.Editor.StateDebugWindow
             AmaryllisDebugEvents.ActionStarted += OnActionStarted;
             AmaryllisDebugEvents.ActionFinished += OnActionFinished;
 
+            RestoreTargetIfNeeded();
             if (_targetEntity == null)
             {
                 SetTarget(GetSelectedEntity());
@@ -254,7 +257,7 @@ namespace Amaryllis.Editor.StateDebugWindow
 
             foreach (var state in graph.States)
             {
-                if (state.NextStateId == -1 || !statesById.TryGetValue(state.NextStateId, out var nextState))
+                if (state.NextStateId == -1 || state.NextStateId == state.StateId || !statesById.TryGetValue(state.NextStateId, out var nextState))
                 {
                     continue;
                 }
@@ -265,17 +268,22 @@ namespace Amaryllis.Editor.StateDebugWindow
             Handles.color = new Color(0.7f, 0.7f, 0.7f, 0.45f);
             foreach (var state in graph.States)
             {
-                DrawLine(layout.EntityRect, layout.StateRects[state]);
+                DrawBezierLine(layout.EntityRect, layout.StateRects[state]);
             }
 
             Handles.EndGUI();
         }
 
-        private static void DrawLine(Rect from, Rect to)
+        private static void DrawBezierLine(Rect from, Rect to)
         {
             var start = new Vector3(from.center.x, from.yMax);
             var end = new Vector3(to.center.x, to.yMin);
-            Handles.DrawAAPolyLine(2f, start, end);
+            var distance = Vector3.Distance(start, end);
+            var tangentLength = Mathf.Clamp(distance * 0.45f, 48f, 160f);
+            var startTangent = start + Vector3.up * tangentLength;
+            var endTangent = end - Vector3.up * tangentLength;
+
+            Handles.DrawBezier(start, end, startTangent, endTangent, Handles.color, null, 2f);
         }
 
         private static void DrawArrow(Rect from, Rect to)
@@ -289,9 +297,27 @@ namespace Amaryllis.Editor.StateDebugWindow
                 end = new Vector3(to.center.x, to.yMin);
             }
 
-            Handles.DrawAAPolyLine(3f, start, end);
+            var distance = Vector3.Distance(start, end);
+            var tangentLength = Mathf.Clamp(distance * 0.45f, 56f, 180f);
+            var horizontalDirection = Mathf.Sign(end.x - start.x);
+            if (Mathf.Approximately(horizontalDirection, 0f))
+            {
+                horizontalDirection = 1f;
+            }
 
-            var direction = ((Vector2)(end - start)).normalized;
+            var startTangent = start + Vector3.right * horizontalDirection * tangentLength;
+            var endTangent = end - Vector3.right * horizontalDirection * tangentLength;
+
+            if (Mathf.Abs(end.y - start.y) > Mathf.Abs(end.x - start.x))
+            {
+                var verticalDirection = Mathf.Sign(end.y - start.y);
+                startTangent = start + Vector3.up * verticalDirection * tangentLength;
+                endTangent = end - Vector3.up * verticalDirection * tangentLength;
+            }
+
+            Handles.DrawBezier(start, end, startTangent, endTangent, Handles.color, null, 3f);
+
+            var direction = ((Vector2)(end - endTangent)).normalized;
             if (direction == Vector2.zero)
             {
                 return;
@@ -402,6 +428,7 @@ namespace Amaryllis.Editor.StateDebugWindow
         private void SetTarget(HasStateEntity entity)
         {
             _targetEntity = entity;
+            CacheTargetGlobalId(entity);
             ClearLiveState();
             Repaint();
         }
@@ -428,7 +455,7 @@ namespace Amaryllis.Editor.StateDebugWindow
 
             _runningActionComponents.Add(debugEvent.ActionComponent);
             _lastActionResults.Remove(debugEvent.ActionComponent);
-            AddTimelineEntry(debugEvent.Time, $"Action start [{debugEvent.ExecTime}] {debugEvent.ActionComponent.name}", new Color(0.35f, 0.72f, 1f));
+            AddTimelineEntry(debugEvent.Time, $"Action start [{debugEvent.ExecTime}] {FormatActionContext(debugEvent.ActionComponent)}", new Color(0.35f, 0.72f, 1f));
             Repaint();
         }
 
@@ -449,13 +476,26 @@ namespace Amaryllis.Editor.StateDebugWindow
             var color = debugEvent.Result == RunActionResult.Failed || debugEvent.Result == RunActionResult.Canceled
                 ? new Color(1f, 0.45f, 0.45f)
                 : new Color(0.72f, 0.72f, 0.72f);
-            AddTimelineEntry(debugEvent.Time, $"Action finish [{debugEvent.ExecTime}] {resultText} {debugEvent.ActionComponent.name}", color);
+            AddTimelineEntry(debugEvent.Time, $"Action finish [{debugEvent.ExecTime}] {resultText} {FormatActionContext(debugEvent.ActionComponent)}", color);
             Repaint();
         }
 
         private void OnPlayModeStateChanged(PlayModeStateChange state)
         {
-            if (state == PlayModeStateChange.EnteredEditMode || state == PlayModeStateChange.ExitingPlayMode)
+            if (state == PlayModeStateChange.ExitingEditMode)
+            {
+                CacheTargetGlobalId(_targetEntity);
+                return;
+            }
+
+            if (state == PlayModeStateChange.EnteredPlayMode || state == PlayModeStateChange.EnteredEditMode)
+            {
+                RestoreTargetIfNeeded();
+            }
+
+            if (state == PlayModeStateChange.EnteredPlayMode
+                || state == PlayModeStateChange.EnteredEditMode
+                || state == PlayModeStateChange.ExitingPlayMode)
             {
                 ClearLiveState();
                 Repaint();
@@ -493,6 +533,54 @@ namespace Amaryllis.Editor.StateDebugWindow
             {
                 _timelineEntries.RemoveAt(_timelineEntries.Count - 1);
             }
+        }
+
+        private static string FormatActionContext(Component actionComponent)
+        {
+            var actionType = actionComponent.GetType().Name;
+            var actionName = actionComponent.name;
+            var actionText = actionType == actionName
+                ? actionType
+                : $"{actionType} ({actionName})";
+            var state = actionComponent.GetComponentInParent<StateObjectBase>();
+            if (state == null)
+            {
+                return actionText;
+            }
+
+            return $"{state.name} [{state.StateId}] -> {actionText}";
+        }
+
+        private void RestoreTargetIfNeeded()
+        {
+            if (_targetEntity != null || string.IsNullOrEmpty(_targetGlobalId))
+            {
+                return;
+            }
+
+            if (!GlobalObjectId.TryParse(_targetGlobalId, out var globalObjectId))
+            {
+                return;
+            }
+
+            var targetObject = GlobalObjectId.GlobalObjectIdentifierToObjectSlow(globalObjectId);
+            if (targetObject is HasStateEntity entity)
+            {
+                _targetEntity = entity;
+                return;
+            }
+
+            if (targetObject is GameObject gameObject)
+            {
+                _targetEntity = gameObject.GetComponentInParent<HasStateEntity>();
+            }
+        }
+
+        private void CacheTargetGlobalId(HasStateEntity entity)
+        {
+            _targetGlobalId = entity == null
+                ? string.Empty
+                : GlobalObjectId.GetGlobalObjectIdSlow(entity).ToString();
         }
 
         private static HasStateEntity GetSelectedEntity()
