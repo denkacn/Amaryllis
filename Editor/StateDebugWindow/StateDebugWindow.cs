@@ -1,4 +1,5 @@
 using Amaryllis.Entities.Models;
+using Amaryllis.Actions.Interfaces;
 using Amaryllis.Actions.Models;
 using Amaryllis.Debugging;
 using Amaryllis.States.Models;
@@ -386,11 +387,21 @@ namespace Amaryllis.Editor.StateDebugWindow
             return rect.yMin + rect.height * Mathf.Clamp01((point - 1) / 4f);
         }
 
-        private static void DrawEntityNode(StateDebugGraphModel graph, Rect rect)
+        private void DrawEntityNode(StateDebugGraphModel graph, Rect rect)
         {
             GUI.Box(rect, GUIContent.none, EditorStyles.helpBox);
             var inner = RectOffset(rect, 10f, 8f);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 18f), "Entity", EditorStyles.boldLabel);
+            GUI.Label(new Rect(inner.x, inner.y, inner.width - 54f, 18f), "Entity", EditorStyles.boldLabel);
+
+            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || graph.Entity == null))
+            {
+                if (GUI.Button(new Rect(inner.xMax - 50f, inner.y, 50f, 18f), "Exec", EditorStyles.miniButton))
+                {
+                    AddTimelineEntry(EditorApplication.timeSinceStartup, "Debug exec entity", new Color(0.95f, 0.78f, 0.25f));
+                    AmaryllisDebugCommands.ExecEntity(graph.Entity);
+                }
+            }
+
             GUI.Label(new Rect(inner.x, inner.y + 22f, inner.width, 18f), graph.Entity.name);
             GUI.Label(new Rect(inner.x, inner.y + 44f, inner.width, 18f), graph.StatesObject.name, EditorStyles.miniLabel);
         }
@@ -405,7 +416,18 @@ namespace Amaryllis.Editor.StateDebugWindow
             GUI.backgroundColor = backgroundColor;
 
             var inner = RectOffset(rect, 10f, 8f);
-            GUI.Label(new Rect(inner.x, inner.y, inner.width, 18f), $"{state.Name}  [{state.StateId}]", EditorStyles.boldLabel);
+            var titleRect = new Rect(inner.x, inner.y, inner.width - 48f, 18f);
+            GUI.Label(titleRect, $"{state.Name}  [{state.StateId}]", EditorStyles.boldLabel);
+
+            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || isCurrent))
+            {
+                if (GUI.Button(new Rect(inner.xMax - 44f, inner.y, 44f, 18f), "Set", EditorStyles.miniButton))
+                {
+                    AddTimelineEntry(EditorApplication.timeSinceStartup, $"Debug set state -> {state.StateId}", new Color(0.95f, 0.78f, 0.25f));
+                    AmaryllisDebugCommands.MoveToState(graph.StatesObject, state.StateId);
+                }
+            }
+
             GUI.Label(new Rect(inner.x, inner.y + 22f, inner.width, 16f), $"Next: {FormatNextState(state.NextStateId)}", EditorStyles.miniLabel);
 
             var actionsY = inner.y + 48f;
@@ -441,7 +463,7 @@ namespace Amaryllis.Editor.StateDebugWindow
             }
         }
 
-        private static void DrawActionRow(Rect rect, StateDebugActionModel action, bool isRunning, bool hasLastResult, RunActionResult lastResult)
+        private void DrawActionRow(Rect rect, StateDebugActionModel action, bool isRunning, bool hasLastResult, RunActionResult lastResult)
         {
             var backgroundColor = GUI.backgroundColor;
             if (isRunning)
@@ -463,13 +485,34 @@ namespace Amaryllis.Editor.StateDebugWindow
                 label += $" | if {conditions}";
             }
 
-            if (GUI.Button(rect, label, EditorStyles.miniButtonLeft) && action.Component != null)
+            var runButtonRect = new Rect(rect.xMax - 42f, rect.y, 42f, rect.height);
+            var labelRect = new Rect(rect.x, rect.y, rect.width - 44f, rect.height);
+
+            if (GUI.Button(labelRect, label, EditorStyles.miniButtonLeft) && action.Component != null)
             {
                 Selection.activeObject = action.Component.gameObject;
                 EditorGUIUtility.PingObject(action.Component.gameObject);
             }
 
+            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || isRunning || action.Component == null))
+            {
+                if (GUI.Button(runButtonRect, "Run", EditorStyles.miniButton))
+                {
+                    RunDebugAction(action);
+                }
+            }
+
             GUI.backgroundColor = backgroundColor;
+        }
+
+        private void RunDebugAction(StateDebugActionModel actionModel)
+        {
+            if (actionModel.Component == null || actionModel.Component is not IRunAction action)
+            {
+                return;
+            }
+
+            AmaryllisDebugCommands.RunAction(action, _targetEntity, actionModel.ExecTime);
         }
 
         private static float DrawConditionSection(Rect inner, StateDebugNodeModel state)
