@@ -34,17 +34,24 @@ namespace Amaryllis.EntityActions
             if (_isPlay)
             {
                 _audioSource.Play();
-                _audioSource.DOFade(_maxVolume, 2f);
+                FadeAudio(_maxVolume, 2f);
             }
             else
             {
-                _audioSource.DOFade(0, 2f).OnComplete(() =>
+                FadeAudio(0, 2f).OnComplete(() =>
                 {
                     _audioSource.Stop();
                 });
             }
 
             return UniTask.FromResult(true);
+        }
+
+        private Tween FadeAudio(float volume, float duration)
+        {
+            return DOTween.To(() => _audioSource.volume, value => _audioSource.volume = value, volume, duration)
+                .SetTarget(_audioSource)
+                .SetEase(Ease.Linear);
         }
     }
 }

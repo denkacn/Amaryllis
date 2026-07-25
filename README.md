@@ -2,6 +2,33 @@
 
 Amaryllis State Behavior System is a Unity-friendly state/action framework.
 
+## Unity Package Manager
+
+Amaryllis can be installed as a Unity Package Manager package from this repository:
+
+```json
+"com.puzikgames.amaryllis": "https://github.com/denkacn/StateBehaviorSystem.git?path=/Assets/Amaryllis"
+```
+
+For local development, add it from disk with the package path:
+
+```text
+D:/MyProjects/StateBehaviorSystem/Assets/Amaryllis
+```
+
+Required dependency:
+- `com.cysharp.unitask`
+
+Optional dependencies:
+- Odin Inspector enables `Amaryllis.EntityActions` and `Amaryllis.Utils`.
+- DOTween is also required for `Amaryllis.EntityActions`.
+
+Assemblies:
+- `Amaryllis.Runtime` - core runtime, persistence, networking contracts, and debug events.
+- `Amaryllis.Editor` - editor-only state debug window.
+- `Amaryllis.EntityActions` - optional ready-made actions, compiled only when `ODIN_INSPECTOR` and `DOTWEEN` are available.
+- `Amaryllis.Utils` - optional local helpers, compiled only when `ODIN_INSPECTOR` is available.
+
 ## Module Boundaries
 
 Core:

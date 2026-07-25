@@ -1,4 +1,4 @@
-using System.Threading;
+﻿using System.Threading;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Interfaces;
 using Cysharp.Threading.Tasks;
@@ -93,7 +93,9 @@ namespace Amaryllis.EntityActions
         {
             if (_fadeTime > 0)
             {
-                _audioSource.DOFade(0, _fadeTime).SetEase(Ease.Linear);
+                DOTween.To(() => _audioSource.volume, value => _audioSource.volume = value, 0, _fadeTime)
+                    .SetTarget(_audioSource)
+                    .SetEase(Ease.Linear);
             }
         }
     }

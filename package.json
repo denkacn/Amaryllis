@@ -1,0 +1,22 @@
+{
+  "name": "com.puzikgames.amaryllis",
+  "displayName": "Amaryllis State Behavior System",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "author": {
+    "name": "Denis Puzik"
+  },
+  "description": "Unity-friendly state/action framework with runtime state graphs, async action execution, persistence helpers, networking hooks, and a Play Mode debug window.",
+  "keywords": [
+    "state",
+    "state-machine",
+    "actions",
+    "debugging",
+    "unitask"
+  ],
+  "dependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/denkacn/StateBehaviorSystem.git"
+  }
+}
