@@ -16,6 +16,9 @@ namespace Amaryllis.Editor.StateDebugWindow
         private const float StateNodeWidth = 260f;
         private const float StateHeaderHeight = 72f;
         private const float ActionRowHeight = 20f;
+        private const float ConditionRowHeight = 18f;
+        private const float GroupHeaderHeight = 18f;
+        private const float SectionSpacing = 8f;
         private const float CanvasPadding = 32f;
         private const float StateHorizontalSpacing = 34f;
         private const float StateVerticalSpacing = 42f;
@@ -209,24 +212,72 @@ namespace Amaryllis.Editor.StateDebugWindow
             var stateRects = new Dictionary<StateDebugNodeModel, Rect>();
             var entityRect = new Rect(CanvasPadding, CanvasPadding, EntityNodeWidth, EntityNodeHeight);
             var startY = entityRect.yMax + 72f;
-            var maxBottom = startY;
+            var rowHeights = new List<float>();
+
+            for (var index = 0; index < graph.States.Count; index++)
+            {
+                var state = graph.States[index];
+                var row = index / columns;
+                var height = CalculateStateNodeHeight(state);
+                while (rowHeights.Count <= row)
+                {
+                    rowHeights.Add(0f);
+                }
+
+                rowHeights[row] = Mathf.Max(rowHeights[row], height);
+            }
+
+            var rowY = new List<float>(rowHeights.Count);
+            var currentY = startY;
+            foreach (var rowHeight in rowHeights)
+            {
+                rowY.Add(currentY);
+                currentY += rowHeight + StateVerticalSpacing;
+            }
 
             for (var index = 0; index < graph.States.Count; index++)
             {
                 var state = graph.States[index];
                 var column = index % columns;
                 var row = index / columns;
-                var height = StateHeaderHeight + Mathf.Max(1, state.Actions.Count) * ActionRowHeight + 18f;
+                var height = CalculateStateNodeHeight(state);
                 var x = CanvasPadding + column * (StateNodeWidth + StateHorizontalSpacing);
-                var y = startY + row * (StateHeaderHeight + 8 * ActionRowHeight + StateVerticalSpacing);
+                var y = rowY[row];
                 var rect = new Rect(x, y, StateNodeWidth, height);
                 stateRects.Add(state, rect);
-                maxBottom = Mathf.Max(maxBottom, rect.yMax);
             }
 
             var contentWidth = CanvasPadding * 2f + columns * StateNodeWidth + (columns - 1) * StateHorizontalSpacing;
-            var contentHeight = maxBottom + CanvasPadding;
+            var contentHeight = currentY - StateVerticalSpacing + CanvasPadding;
             return new GraphLayout(entityRect, stateRects, new Vector2(contentWidth, contentHeight));
+        }
+
+        private static float CalculateStateNodeHeight(StateDebugNodeModel state)
+        {
+            var height = StateHeaderHeight;
+            if (state.Conditions.Count > 0)
+            {
+                height += GroupHeaderHeight + state.Conditions.Count * ConditionRowHeight + SectionSpacing;
+            }
+
+            height += GroupHeaderHeight;
+            if (state.Actions.Count == 0)
+            {
+                height += ActionRowHeight;
+            }
+            else
+            {
+                foreach (var group in state.Actions.GroupBy(action => action.ExecTime))
+                {
+                    height += GroupHeaderHeight;
+                    foreach (var action in group)
+                    {
+                        height += ActionRowHeight;
+                    }
+                }
+            }
+
+            return height + 18f;
         }
 
         private static void DrawGrid(Rect contentRect)
@@ -291,33 +342,14 @@ namespace Amaryllis.Editor.StateDebugWindow
             var start = new Vector3(from.xMax, from.center.y);
             var end = new Vector3(to.xMin, to.center.y);
 
-            if (to.xMin < from.xMax && Mathf.Abs(to.center.y - from.center.y) > 1f)
-            {
-                start = new Vector3(from.center.x, from.yMax);
-                end = new Vector3(to.center.x, to.yMin);
-            }
-
             var distance = Vector3.Distance(start, end);
             var tangentLength = Mathf.Clamp(distance * 0.45f, 56f, 180f);
-            var horizontalDirection = Mathf.Sign(end.x - start.x);
-            if (Mathf.Approximately(horizontalDirection, 0f))
-            {
-                horizontalDirection = 1f;
-            }
-
-            var startTangent = start + Vector3.right * horizontalDirection * tangentLength;
-            var endTangent = end - Vector3.right * horizontalDirection * tangentLength;
-
-            if (Mathf.Abs(end.y - start.y) > Mathf.Abs(end.x - start.x))
-            {
-                var verticalDirection = Mathf.Sign(end.y - start.y);
-                startTangent = start + Vector3.up * verticalDirection * tangentLength;
-                endTangent = end - Vector3.up * verticalDirection * tangentLength;
-            }
+            var startTangent = start + Vector3.right * tangentLength;
+            var endTangent = end - Vector3.right * tangentLength;
 
             Handles.DrawBezier(start, end, startTangent, endTangent, Handles.color, null, 3f);
 
-            var direction = ((Vector2)(end - endTangent)).normalized;
+            var direction = Vector2.right;
             if (direction == Vector2.zero)
             {
                 return;
@@ -353,6 +385,12 @@ namespace Amaryllis.Editor.StateDebugWindow
             GUI.Label(new Rect(inner.x, inner.y + 22f, inner.width, 16f), $"Next: {FormatNextState(state.NextStateId)}", EditorStyles.miniLabel);
 
             var actionsY = inner.y + 48f;
+            if (state.Conditions.Count > 0)
+            {
+                actionsY = DrawConditionSection(inner, state);
+                actionsY += SectionSpacing;
+            }
+
             GUI.Label(new Rect(inner.x, actionsY, inner.width, 16f), "Actions", EditorStyles.miniBoldLabel);
             actionsY += 18f;
 
@@ -362,14 +400,20 @@ namespace Amaryllis.Editor.StateDebugWindow
                 return;
             }
 
-            foreach (var action in state.Actions)
+            foreach (var group in state.Actions.GroupBy(action => action.ExecTime))
             {
-                var actionRect = new Rect(inner.x, actionsY, inner.width, ActionRowHeight);
-                var isRunning = action.Component != null && _runningActionComponents.Contains(action.Component);
-                var lastResult = default(RunActionResult);
-                var hasLastResult = action.Component != null && _lastActionResults.TryGetValue(action.Component, out lastResult);
-                DrawActionRow(actionRect, action, isRunning, hasLastResult, lastResult);
-                actionsY += ActionRowHeight;
+                GUI.Label(new Rect(inner.x + 8f, actionsY, inner.width - 8f, GroupHeaderHeight), group.Key.ToString(), EditorStyles.miniBoldLabel);
+                actionsY += GroupHeaderHeight;
+
+                foreach (var action in group)
+                {
+                    var actionRect = new Rect(inner.x, actionsY, inner.width, ActionRowHeight);
+                    var isRunning = action.Component != null && _runningActionComponents.Contains(action.Component);
+                    var lastResult = default(RunActionResult);
+                    var hasLastResult = action.Component != null && _lastActionResults.TryGetValue(action.Component, out lastResult);
+                    DrawActionRow(actionRect, action, isRunning, hasLastResult, lastResult);
+                    actionsY += ActionRowHeight;
+                }
             }
         }
 
@@ -386,9 +430,14 @@ namespace Amaryllis.Editor.StateDebugWindow
             }
 
             var status = isRunning ? "RUN" : hasLastResult ? lastResult.ToString() : string.Empty;
+            var conditions = FormatConditionSummary(action.Conditions);
             var label = string.IsNullOrEmpty(status)
-                ? $"{action.ExecTime} | {action.Priority} | {action.Name}"
-                : $"{action.ExecTime} | {action.Priority} | {status} | {action.Name}";
+                ? $"{action.Priority} | {action.Name}"
+                : $"{action.Priority} | {status} | {action.Name}";
+            if (!string.IsNullOrEmpty(conditions))
+            {
+                label += $" | if {conditions}";
+            }
 
             if (GUI.Button(rect, label, EditorStyles.miniButtonLeft) && action.Component != null)
             {
@@ -397,6 +446,68 @@ namespace Amaryllis.Editor.StateDebugWindow
             }
 
             GUI.backgroundColor = backgroundColor;
+        }
+
+        private static float DrawConditionSection(Rect inner, StateDebugNodeModel state)
+        {
+            var y = inner.y + 48f;
+            GUI.Label(new Rect(inner.x, y, inner.width, 16f), "Conditions", EditorStyles.miniBoldLabel);
+            y += GroupHeaderHeight;
+
+            foreach (var condition in state.Conditions)
+            {
+                DrawConditionRow(new Rect(inner.x, y, inner.width, ConditionRowHeight), condition);
+                y += ConditionRowHeight;
+            }
+
+            return y;
+        }
+
+        private static void DrawConditionRow(Rect rect, StateDebugConditionModel condition)
+        {
+            GUI.Label(rect, $"- {FormatConditionLabel(condition)}", EditorStyles.miniLabel);
+        }
+
+        private static string FormatConditionSummary(IReadOnlyList<StateDebugConditionModel> conditions)
+        {
+            return conditions == null || conditions.Count == 0
+                ? string.Empty
+                : string.Join(", ", conditions.Select(FormatConditionLabel));
+        }
+
+        private static string FormatConditionLabel(StateDebugConditionModel condition)
+        {
+            var label = condition.Name;
+            if (condition.Source is Component component && component.gameObject.name != condition.Name)
+            {
+                label += $" ({component.gameObject.name})";
+            }
+
+            if (TryGetSerializedBool(condition.Source, "_isCanExec", out var isCanExec))
+            {
+                label += $" = {isCanExec}";
+            }
+
+            return label;
+        }
+
+        private static bool TryGetSerializedBool(UnityEngine.Object source, string propertyName, out bool value)
+        {
+            value = false;
+            if (source == null)
+            {
+                return false;
+            }
+
+            var serializedObject = new SerializedObject(source);
+            var property = serializedObject.FindProperty(propertyName);
+            if (property == null || property.propertyType != SerializedPropertyType.Boolean)
+            {
+                return false;
+            }
+
+            value = property.boolValue;
+            return true;
         }
 
         private static Rect RectOffset(Rect rect, float horizontal, float vertical)
