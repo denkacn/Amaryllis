@@ -129,6 +129,8 @@ GameObject:
   m_Component:
   - component: {fileID: 108459711}
   - component: {fileID: 108459712}
+  - component: {fileID: 108459714}
+  - component: {fileID: 108459713}
   m_Layer: 0
   m_Name: Actions
   m_TagString: Untagged
@@ -169,6 +171,52 @@ MonoBehaviour:
   _execTimeType: 1
   _runActionConditions: []
   _logText: Test Message 3
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &108459713
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 108459710}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e537d8b607e1f2d40a961989b1049283, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Amaryllis.EntityActions::Amaryllis.EntityActions.RunAction_EnableEntity
+  _execPriority: 0
+  _isEnable: 1
+  _startDelayMs: 0
+  _execTimeType: 5
+  _runActionConditions: []
+  _entityObject: {fileID: 1439382147}
+  _isActive: 1
+  references:
+    version: 2
+    RefIds: []
+--- !u!114 &108459714
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 108459710}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 807e0aca3b28b3b439df75ddae6d2294, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Amaryllis.EntityActions::Amaryllis.EntityActions.RunAction_ParalelActionsSequence
+  _execPriority: 0
+  _isEnable: 1
+  _startDelayMs: 0
+  _execTimeType: 0
+  _runActionConditions: []
+  _actionItems:
+  - PreDaley: 0
+    RunAction: {fileID: 108459713}
+  _actionTime: 0
   references:
     version: 2
     RefIds: []

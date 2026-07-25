@@ -29,6 +29,7 @@ namespace Amaryllis.Actions.Models
 
         public int ExecPriority => _execPriority;
         public ExecTimeType ExecTime => _execTimeType;
+        public bool IsEnabled => _isEnable;
 
         public virtual async UniTask<RunActionResult> Run(IEntity entity, CancellationToken cancellationToken = default)
         {

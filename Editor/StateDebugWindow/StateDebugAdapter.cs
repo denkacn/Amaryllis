@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using Amaryllis.Actions.Helpers;
 using Amaryllis.Actions.Interfaces;
 using Amaryllis.Actions.Models;
 using Amaryllis.Entities.Models;
@@ -37,18 +38,39 @@ namespace Amaryllis.Editor.StateDebugWindow
 
         private static IReadOnlyList<StateDebugActionModel> BuildActions(StateObjectBase state)
         {
-            return state
+            var actions = state
                 .GetComponentsInChildren<MonoBehaviour>(true)
                 .OfType<IRunAction>()
-                .OrderBy(action => action.ExecTime)
-                .ThenBy(action => action.ExecPriority)
-                .Select(action => new StateDebugActionModel(
-                    action as Component,
-                    (action as Component) == null ? action.GetType().Name : (action as Component).GetType().Name,
-                    action.ExecTime,
-                    action.ExecPriority,
-                    BuildActionConditions(action)))
                 .ToList();
+
+            return CompositeRunActionUtility.GetRootActions(actions)
+                .OrderBy(action => action.ExecTime)
+                .ThenByDescending(action => action.ExecPriority)
+                .Select(BuildActionModel)
+                .ToList();
+        }
+
+        private static StateDebugActionModel BuildActionModel(IRunAction action)
+        {
+            var component = action as Component;
+            return new StateDebugActionModel(
+                component,
+                component == null ? action.GetType().Name : component.GetType().Name,
+                action.ExecTime,
+                action.ExecPriority,
+                IsActionEnabled(action),
+                BuildActionConditions(action),
+                BuildChildActions(action));
+        }
+
+        private static IReadOnlyList<StateDebugActionModel> BuildChildActions(IRunAction action)
+        {
+            return action is ICompositeRunAction composite && composite.ChildActions != null
+                ? composite.ChildActions
+                    .Where(childAction => childAction != null)
+                    .Select(BuildActionModel)
+                    .ToList()
+                : new List<StateDebugActionModel>();
         }
 
         private static IReadOnlyList<StateDebugConditionModel> BuildConditions(StateObjectBase state)
@@ -82,6 +104,11 @@ namespace Amaryllis.Editor.StateDebugWindow
                 .Select(condition => new StateDebugConditionModel(null, condition.GetType().Name))
                 .ToList()
                 ?? new List<StateDebugConditionModel>();
+        }
+
+        private static bool IsActionEnabled(IRunAction action)
+        {
+            return action is not BaseRunAction baseRunAction || baseRunAction.IsEnabled;
         }
     }
 }

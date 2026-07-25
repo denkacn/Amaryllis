@@ -253,12 +253,28 @@ namespace Amaryllis.Editor.StateDebugWindow
                     height += GroupHeaderHeight;
                     foreach (var action in group)
                     {
-                        height += ActionRowHeight;
+                        height += CalculateActionNodeHeight(action);
                     }
                 }
             }
 
             return height + 18f;
+        }
+
+        private static float CalculateActionNodeHeight(StateDebugActionModel action)
+        {
+            var height = ActionRowHeight;
+            if (action.ChildActions == null)
+            {
+                return height;
+            }
+
+            foreach (var childAction in action.ChildActions)
+            {
+                height += CalculateActionNodeHeight(childAction);
+            }
+
+            return height;
         }
 
         private static void DrawGrid(Rect contentRect)
@@ -451,24 +467,46 @@ namespace Amaryllis.Editor.StateDebugWindow
                 GUI.Label(new Rect(inner.x + 8f, actionsY, inner.width - 8f, GroupHeaderHeight), group.Key.ToString(), EditorStyles.miniBoldLabel);
                 actionsY += GroupHeaderHeight;
 
-                foreach (var action in group)
+                foreach (var action in group.OrderByDescending(action => action.Priority))
                 {
-                    var actionRect = new Rect(inner.x, actionsY, inner.width, ActionRowHeight);
-                    var isRunning = action.Component != null && _runningActionComponents.Contains(action.Component);
-                    var lastResult = default(RunActionResult);
-                    var hasLastResult = action.Component != null && _lastActionResults.TryGetValue(action.Component, out lastResult);
-                    DrawActionRow(actionRect, action, isRunning, hasLastResult, lastResult);
-                    actionsY += ActionRowHeight;
+                    actionsY = DrawActionTree(inner, actionsY, action, 0);
                 }
             }
         }
 
-        private void DrawActionRow(Rect rect, StateDebugActionModel action, bool isRunning, bool hasLastResult, RunActionResult lastResult)
+        private float DrawActionTree(Rect inner, float y, StateDebugActionModel action, int depth)
+        {
+            var indent = depth * 14f;
+            var actionRect = new Rect(inner.x + indent, y, inner.width - indent, ActionRowHeight);
+            var isRunning = action.Component != null && _runningActionComponents.Contains(action.Component);
+            var lastResult = default(RunActionResult);
+            var hasLastResult = action.Component != null && _lastActionResults.TryGetValue(action.Component, out lastResult);
+            DrawActionRow(actionRect, action, depth, isRunning, hasLastResult, lastResult);
+            y += ActionRowHeight;
+
+            if (action.ChildActions == null)
+            {
+                return y;
+            }
+
+            foreach (var childAction in action.ChildActions)
+            {
+                y = DrawActionTree(inner, y, childAction, depth + 1);
+            }
+
+            return y;
+        }
+
+        private void DrawActionRow(Rect rect, StateDebugActionModel action, int depth, bool isRunning, bool hasLastResult, RunActionResult lastResult)
         {
             var backgroundColor = GUI.backgroundColor;
             if (isRunning)
             {
                 GUI.backgroundColor = new Color(0.35f, 0.72f, 1f);
+            }
+            else if (!action.IsEnabled)
+            {
+                GUI.backgroundColor = new Color(0.46f, 0.46f, 0.46f);
             }
             else if (hasLastResult && (lastResult == RunActionResult.Failed || lastResult == RunActionResult.Canceled))
             {
@@ -477,9 +515,12 @@ namespace Amaryllis.Editor.StateDebugWindow
 
             var status = isRunning ? "RUN" : hasLastResult ? lastResult.ToString() : string.Empty;
             var conditions = FormatConditionSummary(action.Conditions);
+            var childMarker = action.ChildActions != null && action.ChildActions.Count > 0 ? " [+]" : string.Empty;
+            var depthMarker = depth > 0 ? "> " : string.Empty;
+            var enabledMarker = action.IsEnabled ? string.Empty : "DISABLED | ";
             var label = string.IsNullOrEmpty(status)
-                ? $"{action.Priority} | {action.Name}"
-                : $"{action.Priority} | {status} | {action.Name}";
+                ? $"{depthMarker}{enabledMarker}P:{action.Priority} | {action.Name}{childMarker}"
+                : $"{depthMarker}{enabledMarker}P:{action.Priority} | {status} | {action.Name}{childMarker}";
             if (!string.IsNullOrEmpty(conditions))
             {
                 label += $" | if {conditions}";
@@ -494,7 +535,7 @@ namespace Amaryllis.Editor.StateDebugWindow
                 EditorGUIUtility.PingObject(action.Component.gameObject);
             }
 
-            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || isRunning || action.Component == null))
+            using (new EditorGUI.DisabledScope(!EditorApplication.isPlaying || isRunning || action.Component == null || !action.IsEnabled))
             {
                 if (GUI.Button(runButtonRect, "Run", EditorStyles.miniButton))
                 {

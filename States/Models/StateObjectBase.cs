@@ -26,7 +26,7 @@ namespace Amaryllis.States.Models
         {
             AmaryllisLog.Log($@"[StateObjectBase] PreInit {_stateId}");
 
-             _actions = GetComponentsInChildren<IRunAction>(true).Where(action => action != null).ToList();
+             _actions = CompositeRunActionUtility.GetRootActions(GetComponentsInChildren<IRunAction>(true));
              _conditions = GetComponentsInChildren<IStateCondition>(true).Where(condition => condition != null).ToList();
              
              await RunActionLogicHelper.RunActionsAsync(ExecTimeType.PreInit, null, _actions, cancellationToken);

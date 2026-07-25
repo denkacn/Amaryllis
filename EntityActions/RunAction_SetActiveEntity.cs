@@ -7,29 +7,19 @@ using UnityEngine;
 
 namespace Amaryllis.EntityActions
 {
-    public class RunAction_EnableEntity : BaseRunAction
+    public class RunAction_SetActiveEntity : BaseRunAction
     {
         [ShowInInspector, PropertySpace]
         
         [SerializeField] private GameObject _entityObject;
-        [SerializeField] private bool _isEnable = true;
+        [SerializeField] private bool _isActive = true;
         
         protected override UniTask<bool> RunLogic(IEntity entity, CancellationToken cancellationToken)
         {
             if (_entityObject != null)
             {
-                _entityObject.SetActive(_isEnable);
+                _entityObject.SetActive(_isActive);
             }
-            
-            //var sceneEntity = _entityObject.GetComponent<ISceneEntity>();
-            
-            // if (sceneEntity != null)
-            // {
-            //     if(_isEnable)
-            //         sceneEntity.SetEnable();
-            //     else 
-            //         sceneEntity.SetDisable();
-            // }              
             
             return UniTask.FromResult(true);
         }
