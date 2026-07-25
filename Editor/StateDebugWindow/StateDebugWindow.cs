@@ -22,6 +22,8 @@ namespace Amaryllis.Editor.StateDebugWindow
         private const float CanvasPadding = 32f;
         private const float StateHorizontalSpacing = 34f;
         private const float StateVerticalSpacing = 42f;
+        private const float EdgeRoutePadding = 28f;
+        private const float EdgeRouteStep = 18f;
         private const int MaxTimelineEntries = 80;
 
         [SerializeField] private HasStateEntity _targetEntity;
@@ -208,47 +210,25 @@ namespace Amaryllis.Editor.StateDebugWindow
 
         private static GraphLayout BuildLayout(StateDebugGraphModel graph)
         {
-            const int columns = 3;
             var stateRects = new Dictionary<StateDebugNodeModel, Rect>();
             var entityRect = new Rect(CanvasPadding, CanvasPadding, EntityNodeWidth, EntityNodeHeight);
             var startY = entityRect.yMax + 72f;
-            var rowHeights = new List<float>();
+            var maxStateHeight = 0f;
 
             for (var index = 0; index < graph.States.Count; index++)
             {
                 var state = graph.States[index];
-                var row = index / columns;
                 var height = CalculateStateNodeHeight(state);
-                while (rowHeights.Count <= row)
-                {
-                    rowHeights.Add(0f);
-                }
+                maxStateHeight = Mathf.Max(maxStateHeight, height);
 
-                rowHeights[row] = Mathf.Max(rowHeights[row], height);
-            }
-
-            var rowY = new List<float>(rowHeights.Count);
-            var currentY = startY;
-            foreach (var rowHeight in rowHeights)
-            {
-                rowY.Add(currentY);
-                currentY += rowHeight + StateVerticalSpacing;
-            }
-
-            for (var index = 0; index < graph.States.Count; index++)
-            {
-                var state = graph.States[index];
-                var column = index % columns;
-                var row = index / columns;
-                var height = CalculateStateNodeHeight(state);
-                var x = CanvasPadding + column * (StateNodeWidth + StateHorizontalSpacing);
-                var y = rowY[row];
-                var rect = new Rect(x, y, StateNodeWidth, height);
+                var x = CanvasPadding + index * (StateNodeWidth + StateHorizontalSpacing);
+                var rect = new Rect(x, startY, StateNodeWidth, height);
                 stateRects.Add(state, rect);
             }
 
-            var contentWidth = CanvasPadding * 2f + columns * StateNodeWidth + (columns - 1) * StateHorizontalSpacing;
-            var contentHeight = currentY - StateVerticalSpacing + CanvasPadding;
+            var stateCount = Mathf.Max(graph.States.Count, 1);
+            var contentWidth = CanvasPadding * 2f + stateCount * StateNodeWidth + (stateCount - 1) * StateHorizontalSpacing;
+            var contentHeight = startY + maxStateHeight + CanvasPadding + graph.States.Count * EdgeRouteStep;
             return new GraphLayout(entityRect, stateRects, new Vector2(contentWidth, contentHeight));
         }
 
@@ -313,7 +293,7 @@ namespace Amaryllis.Editor.StateDebugWindow
                     continue;
                 }
 
-                DrawArrow(layout.StateRects[state], layout.StateRects[nextState]);
+                DrawArrow(layout.StateRects[state], layout.StateRects[nextState], layout.StateRects.Values);
             }
 
             Handles.color = new Color(0.7f, 0.7f, 0.7f, 0.45f);
@@ -337,29 +317,73 @@ namespace Amaryllis.Editor.StateDebugWindow
             Handles.DrawBezier(start, end, startTangent, endTangent, Handles.color, null, 2f);
         }
 
-        private static void DrawArrow(Rect from, Rect to)
+        private static void DrawArrow(Rect from, Rect to, IEnumerable<Rect> stateRects)
         {
-            var start = new Vector3(from.xMax, from.center.y);
-            var end = new Vector3(to.xMin, to.center.y);
+            var points = BuildArrowPath(from, to, stateRects);
+            Handles.DrawAAPolyLine(3f, points);
 
-            var distance = Vector3.Distance(start, end);
-            var tangentLength = Mathf.Clamp(distance * 0.45f, 56f, 180f);
-            var startTangent = start + Vector3.right * tangentLength;
-            var endTangent = end - Vector3.right * tangentLength;
-
-            Handles.DrawBezier(start, end, startTangent, endTangent, Handles.color, null, 3f);
-
-            var direction = Vector2.right;
+            var tip = (Vector2)points[points.Length - 1];
+            var direction = ((Vector2)points[points.Length - 1] - (Vector2)points[points.Length - 2]).normalized;
             if (direction == Vector2.zero)
             {
                 return;
             }
 
             var normal = new Vector2(-direction.y, direction.x);
-            var tip = (Vector2)end;
             var left = tip - direction * 11f + normal * 5f;
             var right = tip - direction * 11f - normal * 5f;
             Handles.DrawAAConvexPolygon(tip, left, right);
+        }
+
+        private static Vector3[] BuildArrowPath(Rect from, Rect to, IEnumerable<Rect> stateRects)
+        {
+            var start = new Vector3(from.xMax, from.center.y);
+            var isForward = to.xMin > from.xMin;
+            var distanceInStates = Mathf.Max(1, Mathf.RoundToInt(Mathf.Abs(to.xMin - from.xMin) / (StateNodeWidth + StateHorizontalSpacing)));
+            var exitX = from.xMax + StateHorizontalSpacing * 0.5f;
+            var enterX = to.xMin - StateHorizontalSpacing * 0.5f;
+
+            if (isForward && distanceInStates == 1)
+            {
+                var centerEnd = new Vector3(to.xMin, to.center.y);
+                if (Mathf.Abs(start.y - centerEnd.y) < 1f)
+                {
+                    return new[] { start, centerEnd };
+                }
+
+                return new[]
+                {
+                    start,
+                    new Vector3(exitX, start.y),
+                    new Vector3(exitX, centerEnd.y),
+                    centerEnd
+                };
+            }
+
+            var routeOffset = EdgeRoutePadding + (distanceInStates - 1) * EdgeRouteStep;
+            var left = Mathf.Min(from.xMin, to.xMin);
+            var right = Mathf.Max(from.xMax, to.xMax);
+            var spannedRects = stateRects.Where(rect => rect.xMax >= left && rect.xMin <= right);
+            var routeY = isForward
+                ? spannedRects.Max(rect => rect.yMax) + routeOffset
+                : spannedRects.Min(rect => rect.yMin) - routeOffset;
+            var entryY = GetStateEdgePointY(to, isForward ? 4 : 2);
+            var end = new Vector3(to.xMin, entryY);
+
+            return new[]
+            {
+                start,
+                new Vector3(exitX, start.y),
+                new Vector3(exitX, routeY),
+                new Vector3(enterX, routeY),
+                new Vector3(enterX, entryY),
+                end
+            };
+        }
+
+        private static float GetStateEdgePointY(Rect rect, int point)
+        {
+            return rect.yMin + rect.height * Mathf.Clamp01((point - 1) / 4f);
         }
 
         private static void DrawEntityNode(StateDebugGraphModel graph, Rect rect)
