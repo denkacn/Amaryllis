@@ -7,13 +7,13 @@ Amaryllis State Behavior System is a Unity-friendly state/action framework.
 Amaryllis can be installed as a Unity Package Manager package from this repository:
 
 ```json
-"com.puzikgames.amaryllis": "https://github.com/denkacn/StateBehaviorSystem.git?path=/Assets/Amaryllis"
+https://github.com/denkacn/Amaryllis.git
 ```
 
 For local development, add it from disk with the package path:
 
 ```text
-D:/MyProjects/StateBehaviorSystem/Assets/Amaryllis
+/StateBehaviorSystem/Assets/Amaryllis
 ```
 
 Required dependency:
