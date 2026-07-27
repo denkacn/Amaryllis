@@ -1,7 +1,7 @@
 {
   "name": "com.puzikgames.amaryllis",
   "displayName": "Amaryllis State Behavior System",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "unity": "2022.3",
   "author": {
     "name": "Denis Puzik"

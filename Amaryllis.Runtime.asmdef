@@ -2,6 +2,7 @@
   "name": "Amaryllis.Runtime",
   "rootNamespace": "Amaryllis",
   "references": [
+    "Amaryllis.Logs",
     "UniTask"
   ],
   "includePlatforms": [],

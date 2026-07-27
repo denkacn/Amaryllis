@@ -2,6 +2,7 @@
     "name": "Amaryllis.EntityActions",
     "rootNamespace": "Amaryllis.EntityActions",
     "references": [
+        "Amaryllis.Logs",
         "Amaryllis.Runtime",
         "UniTask"
     ],
